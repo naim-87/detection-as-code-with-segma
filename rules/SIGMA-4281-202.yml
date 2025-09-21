@@ -1,0 +1,20 @@
+# source: test9.yml
+id: SIGMA-4281-202
+name: Hiding Files with Attrib.exe
+description: Detects usage of attrib.exe to hide files from users.
+tactics:
+- defense-evasion
+techniques:
+- ATTACK.T1564.001
+severity: Medium
+query: 'imProcessCreate
+
+  | where Process endswith "\\attrib.exe" and TargetProcessCommandLine contains "
+  +h " and (not(TargetProcessCommandLine contains "\\desktop.ini "))'
+status: test
+version: 1.0
+clients:
+- '*'
+tags: []
+author: Sami Ruohonen
+last_modified: '2025-09-21T19:08:10'

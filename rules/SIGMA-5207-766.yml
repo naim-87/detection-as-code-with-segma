@@ -1,0 +1,21 @@
+# source: test8.yml
+id: SIGMA-5207-766
+name: Netcat The Powershell Version
+description: Adversaries may use a non-application layer protocol for communication
+  between host and C2 server or among infected hosts within a network
+tactics:
+- command-and-control
+techniques:
+- ATTACK.T1095
+severity: Medium
+query: 'imProcessCreate
+
+  | where TargetProcessCommandLine contains "powercat " or TargetProcessCommandLine
+  contains "powercat.ps1"'
+status: test
+version: 1.0
+clients:
+- '*'
+tags: []
+author: frack113
+last_modified: '2025-09-21T19:08:10'
