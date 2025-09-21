@@ -1,0 +1,34 @@
+id: SOC-2025-002  
+name: "Multiple Failed RDP Attempts Followed by Success"  
+description: "Detects brute-force attacks via RDP with eventual successful login"  
+tactics:  
+  - lateral-movement  
+  - brute-force  
+techniques:  
+  - ATTACK.T1110  # MITRE: Brute Force  
+  - ATTACK.T1021.001  # MITRE: Remote Desktop Protocol  
+severity: High  
+query: |  
+  SecurityEvent  
+  | where EventID == 4625  # Failed login  
+  | where LogonType == 10  # RDP  
+  | summarize FailedAttempts = count() by AccountName, SourceIP  
+  | where FailedAttempts > 5  
+  | join kind=inner (  
+      SecurityEvent  
+      | where EventID == 4624  # Successful login  
+      | where LogonType == 10  
+      | project AccountName, SourceIP  
+    ) on AccountName, SourceIP  
+status: active  
+version: 1.0  
+clients:  
+  - client_c  
+  - client_d  
+tags:  
+  - rdp  
+  - brute-force  
+  - lateral-movement  
+author: analyste.marie  
+#created: 2025-08-16  
+#last_modified: 2025-08-16  

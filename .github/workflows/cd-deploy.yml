@@ -1,0 +1,69 @@
+name: CD - Convertir Sigma vers DaaC et Commiter
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'sigma-rules/**'
+permissions:
+  contents: write
+jobs:
+  convert-and-commit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r scripts/requirements.txt
+
+      - name: Convert Sigma to DaaC
+        run: |
+          python scripts/convert_sigma_to_daac.py
+
+      - name: Debug - Git status and diff after conversion
+        run: |
+          echo "=== GIT STATUS ==="
+          git status
+          echo "=== GIT DIFF (name-status) ==="
+          git diff --name-status rules/
+          echo "=== Untracked files ==="
+          git ls-files --others --exclude-standard rules/
+
+      - name: Validate DaaC rules
+        run: |
+          for rule in rules/*.yml; do
+            python scripts/validate_rule.py "$rule" schemas/rule-schema.json
+            if [ $? -ne 0 ]; then exit 1; fi
+          done
+
+      - name: Check if rules changed
+        id: changed
+        run: |
+          git add rules/
+          if git diff --cached --exit-code; then
+            echo "files_changed=false" >> $GITHUB_OUTPUT
+            echo "No changes detected after add."
+          else
+            echo "files_changed=true" >> $GITHUB_OUTPUT
+            echo "Detected changes to commit."
+          fi
+
+      - name: Commit and Push converted rules
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git commit -m "🤖 Auto-convert: Sigma → KQL " || echo "No changes to commit"
+
+          # Pousser tous les commits
+          git push origin main

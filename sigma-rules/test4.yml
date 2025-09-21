@@ -1,0 +1,26 @@
+title: Suspicious Net Command Execution for Enumeration
+id: b2c3d4e5-f6a7-2345-8765-fedcba654321
+status: experimental
+description: Detects suspicious use of net.exe for user or group enumeration, potentially indicating reconnaissance
+author: dhif
+date: 2025/09/07
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith: '\net.exe'
+    CommandLine|contains:
+      - 'net user'
+      - 'net group'
+      - 'net localgroup'
+  filter_legitimate:
+    CommandLine|contains:
+      - 'net user administrator /domain'  # Example of legitimate admin command
+      - 'net group "Domain Admins" /domain'  # Replace with known legitimate patterns
+  condition: selection and not filter_legitimate
+level: high
+tags:
+  - attack.discovery
+  - attack.t1087  # Account Discovery
+  - attack.t1069  # Permission Groups Discovery

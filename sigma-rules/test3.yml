@@ -1,0 +1,27 @@
+title: Suspicious PowerShell Invoke-WebRequest Execution
+id: a1b2c3d4-e5f6-1234-9876-abcdef123456
+status: experimental
+description: Detects suspicious PowerShell command execution using Invoke-WebRequest with potential malicious indicators
+author: dhif
+date: 2025/09/05
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith:
+      - '\powershell.exe'
+      - '\pwsh.exe'
+    CommandLine|contains: 'Invoke-WebRequest'
+    CommandLine|contains:
+      - 'http://'
+      - 'https://'
+  filter_legitimate:
+    CommandLine|contains:
+      - 'trusted.domain.com'  # Replace with known legitimate domains
+      - 'update.microsoft.com'
+  condition: selection and not filter_legitimate
+level: high
+tags:
+  - attack.execution
+  - attack.t1059

@@ -1,0 +1,55 @@
+name: CI - Validate & Convert Rules
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  convert-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r scripts/requirements.txt
+
+      - name: Get modified Sigma rules
+        id: check-sigma
+        run: |
+          git fetch origin ${{ github.event.pull_request.base.sha }}
+          FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} HEAD | grep '^sigma-rules/.*\.yml$' || echo "")
+          if [ -n "$FILES" ]; then
+            echo "sigma_changed=true" >> $GITHUB_OUTPUT
+            echo "📁 Fichiers détectés :"
+            echo "$FILES"
+          else
+            echo "sigma_changed=false" >> $GITHUB_OUTPUT
+          fi
+      
+      # 🔹 Étape 1 : Validation stricte des règles Sigma
+      - name: Validate Sigma syntax and structure
+        run: |
+          python scripts/validate_sigma.py --fix sigma-rules/*.yml  
+
+
+      - name: Convert Sigma to DaaC
+        if: steps.check-sigma.outputs.sigma_changed == 'true'
+        run: |
+          python scripts/convert_sigma_to_daac.py
+
+      - name: Validate DaaC rules
+        run: |
+          for rule in rules/*.yml; do
+            echo "🔍 Validating $rule"
+            python scripts/validate_rule.py "$rule" schemas/rule-schema.json
+            if [ $? -ne 0 ]; then exit 1; fi
+          done

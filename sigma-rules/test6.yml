@@ -1,0 +1,26 @@
+title: Suspicious Scheduled Task Creation or Modification
+id: e5f6a7b8-c9d0-5678-5432-badc98765432
+status: experimental
+description: Detects suspicious use of schtasks.exe for creating or modifying scheduled tasks, potentially indicating persistence or execution
+author: dhif
+date: 2025/09/07
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith: '\schtasks.exe'
+    CommandLine|contains:
+      - 'schtasks /create'
+      - 'schtasks /change'
+      - 'schtasks /run'
+  filter_legitimate:
+    CommandLine|contains:
+      - 'schtasks /create /tn "Microsoft\'  # Legitimate Microsoft tasks
+      - 'schtasks /create /tn "Windows\'    # Legitimate Windows tasks
+  condition: selection and not filter_legitimate
+level: high
+tags:
+  - attack.persistence
+  - attack.execution
+  - ATTACK.T1053.005  # Scheduled Task/Job: Scheduled Task

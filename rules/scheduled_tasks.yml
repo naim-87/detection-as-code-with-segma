@@ -1,0 +1,25 @@
+id: SOC-2025-002
+name: "Suspicious Scheduled Task Creation by Non-System Account"
+description: "Detects creation of scheduled tasks by non-system accounts (potential persistence mechanism)"
+tactics:
+  - persistence
+  - privilege-escalation
+techniques:
+  - ATTACK.T1053.005
+severity: High
+query: |
+  DeviceScheduleTaskEvents
+  | where ActionType == "ScheduledTaskCreated"
+  | where AccountName !in~ ("system", "localservice", "networkservice", "SYSTEM")
+  | where Folder != "\\Microsoft\\"
+  | where isnotempty(TaskName)
+status: active
+version: 1.0
+clients:
+  - client_a
+  - client_b
+tags:
+  - scheduled_task
+  - persistence
+  - lateral_movement
+author: analyste.jean

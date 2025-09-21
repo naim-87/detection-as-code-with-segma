@@ -1,0 +1,86 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "required": [
+        "id",
+        "name",
+        "description",
+        "severity",
+        "query",
+        "status",
+        "version"
+    ],
+    "properties": {
+        "id": {
+            "type": "string",
+            "pattern": "^(SOC|SIGMA)-[0-9]{4}-[0-9]{3}$",
+            "description": "Identifiant unique de la règle"
+        },
+        "name": {
+            "type": "string"
+        },
+        "description": {
+            "type": "string"
+        },
+        "tactics": {
+            "type": "array",
+            "items": {
+                "type": "string"
+            },
+            "uniqueItems": true
+        },
+        "techniques": {
+            "type": "array",
+            "items": {
+                "type": "string",
+                "pattern": "^ATTACK\\.T[0-9]{4}(\\.[0-9]{3})?$"
+            }
+        },
+        "severity": {
+            "type": "string",
+            "enum": [
+                "Low",
+                "Medium",
+                "High",
+                "Critical"
+            ]
+        },
+        "query": {
+            "type": "string"
+        },
+        "status": {
+            "type": "string",
+            "enum": [
+                "active",
+                "test",
+                "disabled"
+            ]
+        },
+        "version": {
+            "type": "number",
+            "minimum": 0.1
+        },
+        "clients": {
+            "type": "array",
+            "items": {
+                "type": "string"
+            },
+            "description": "Liste des clients concernés (ou '*' pour tous)"
+        },
+        "tags": {
+            "type": "array",
+            "items": {
+                "type": "string"
+            }
+        },
+        "author": {
+            "type": "string",
+            "default": "unknown"
+        },
+        "last_modified": {
+            "type": "string",
+            "format": "date-time"
+        }
+    },
+    "additionalProperties": false
+}

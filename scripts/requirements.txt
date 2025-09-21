@@ -1,0 +1,4 @@
+pysigma>=0.10.0
+pysigma-backend-kusto
+pyyaml
+jsonschema

@@ -1,0 +1,24 @@
+title: Suspicious Whoami Command Execution
+id: c3d4e5f6-a7b8-3456-7654-dcba98765432
+status: experimental
+description: Detects suspicious use of whoami.exe for user or system reconnaissance
+author: dhif
+date: 2025/09/07
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith: '\whoami.exe'
+    CommandLine|contains:
+      - 'whoami'
+      - 'whoami /all'
+      - 'whoami /priv'
+  filter_legitimate:
+    CommandLine|contains:
+      - 'whoami /upn'  # Example of legitimate use by scripts or admins
+      - 'whoami /logonid'  # Replace with known legitimate patterns
+  condition: selection and not filter_legitimate
+level: medium
+tags:
+  - ATTACK.T1033  # System Owner/User Discovery
