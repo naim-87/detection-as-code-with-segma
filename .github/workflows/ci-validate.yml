@@ -21,6 +21,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r scripts/requirements.txt
+          pip install "sigma-cli[sentinel]"
 
       - name: Get modified Sigma rules
         id: check-sigma
@@ -35,21 +36,24 @@ jobs:
             echo "sigma_changed=false" >> $GITHUB_OUTPUT
           fi
       
-      # 🔹 Étape 1 : Validation stricte des règles Sigma
+      # ✔ Étape 1 : Validation stricte des règles Sigma
       - name: Validate Sigma syntax and structure
         run: |
           python scripts/validate_sigma.py --fix sigma-rules/*.yml  
 
-
+      # ✔ étape 2 : convertion des régles sigma  
       - name: Convert Sigma to DaaC
         if: steps.check-sigma.outputs.sigma_changed == 'true'
         run: |
           python scripts/convert_sigma_to_daac.py
-
+      # étape 3 : validation selon le shemas pres définit
       - name: Validate DaaC rules
         run: |
           for rule in rules/*.yml; do
             echo "🔍 Validating $rule"
             python scripts/validate_rule.py "$rule" schemas/rule-schema.json
             if [ $? -ne 0 ]; then exit 1; fi
-          done
+          
+      # étape 4 : validation KQL syntax
+      - name: Validate KQL syntax
+        run: python  scripts/test_kql_syntax.py
