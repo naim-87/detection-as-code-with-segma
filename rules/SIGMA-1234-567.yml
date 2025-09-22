@@ -1,0 +1,18 @@
+# source: test6.yml
+id: SIGMA-1234-567
+name: Scheduled Task Creation via schtasks.exe
+description: Detects creation of scheduled tasks using schtasks.exe with /create.
+tactics: []
+techniques: []
+severity: Medium
+query: 'imProcessCreate
+
+  | where TargetProcessCommandLine contains "/create" and TargetProcessName endswith
+  "\\schtasks.exe"'
+status: test
+version: 1.0
+clients:
+- '*'
+tags: []
+author: SOC Team - RAISEGUARD
+last_modified: '2025-09-22T12:02:06'
