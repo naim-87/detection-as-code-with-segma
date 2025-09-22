@@ -40,6 +40,7 @@ jobs:
       - name: Validate Sigma syntax and structure
         run: |
           python scripts/validate_sigma.py --fix sigma-rules/*.yml  
+          echo " 👍 validation terminer"
 
       # ✔ étape 2 : convertion des régles sigma  
       - name: Convert Sigma to DaaC
