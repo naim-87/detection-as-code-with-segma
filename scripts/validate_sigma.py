@@ -12,7 +12,7 @@ import uuid
 import re
 from pathlib import Path
 from sigma.collection import SigmaCollection
-
+from datetime import datetime, date
 # Champs obligatoires avec valeurs par défaut
 REQUIRED_FIELDS = {
     "title": "TODO: add title",
