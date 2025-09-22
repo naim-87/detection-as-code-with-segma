@@ -45,7 +45,10 @@ jobs:
       - name: Convert Sigma to DaaC
         if: steps.check-sigma.outputs.sigma_changed == 'true'
         run: |
+          echo "🚀 Démarrage de la conversion Sigma → DaaC"
+          set -x  # Active le mode debug
           python scripts/convert_sigma_to_daac.py
+          echo "✅ Conversion terminée"
       # étape 3 : validation selon le shemas pres définit
       - name: Validate DaaC rules
         run: |
