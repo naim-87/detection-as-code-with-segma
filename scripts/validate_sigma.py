@@ -1,10 +1,18 @@
+#!/usr/bin/env python3
 # scripts/validate_sigma.py
+"""
+Valide et corrige automatiquement les règles Sigma.
+Usage :
+  python validate_sigma.py --fix sigma-rules/*.yml
+"""
+
 import sys
 import yaml
 import uuid
 import re
 from pathlib import Path
 from sigma.collection import SigmaCollection
+import datetime
 
 # Champs obligatoires avec valeurs par défaut
 REQUIRED_FIELDS = {
@@ -32,6 +40,23 @@ def is_valid_uuid(val):
         return True
     except Exception:
         return False
+
+
+def make_serializable(obj):
+    """
+    Convertit les objets non serializables (datetime, date) en chaînes.
+    Utile pour yaml.dump().
+    """
+    if isinstance(obj, (dict,)):
+        return {k: make_serializable(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        return [make_serializable(item) for item in obj]
+    elif isinstance(obj, (str, int, float, bool)) or obj is None:
+        return obj
+    elif isinstance(obj, (datetime.date, datetime.datetime)):
+        return obj.isoformat()  # → "2021-07-21"
+    else:
+        return str(obj)  # fallback
 
 
 def validate_and_fix_sigma_file(path, autofix=False):
@@ -66,7 +91,7 @@ def validate_and_fix_sigma_file(path, autofix=False):
                     if autofix:
                         doc[field] = default
                         modified = True
-                        print(f"   Ajouté : {field}")
+                        print(f"   ➕ Ajouté : {field}")
 
             # Correction de date
             if "date" in doc:
@@ -76,7 +101,7 @@ def validate_and_fix_sigma_file(path, autofix=False):
                     if autofix:
                         doc["date"] = fixed
                         modified = True
-                if not DATE_REGEX.match(doc["date"]):
+                if not DATE_REGEX.match(str(doc["date"])):
                     print(f"❌ Format date invalide : {doc['date']}")
                     if autofix:
                         doc["date"] = "2025-01-01"
@@ -115,8 +140,12 @@ def validate_and_fix_sigma_file(path, autofix=False):
         if autofix and modified:
             backup = file_path.with_suffix(file_path.suffix + ".bak")
             file_path.rename(backup)
+
+            # 🔧 Appliquer make_serializable AVANT dump
+            serializable_docs = [make_serializable(doc) for doc in docs]
+
             with open(file_path, "w", encoding="utf-8") as f:
-                yaml.dump_all(docs, f, sort_keys=False, allow_unicode=True)
+                yaml.dump_all(serializable_docs, f, sort_keys=False, allow_unicode=True, default_flow_style=False)
             print(f"💾 Fichier corrigé : {file_path} (backup: {backup})")
 
         if valid:
@@ -147,6 +176,8 @@ def get_sigma_files(paths):
 
 
 if __name__ == "__main__":
+
+
     if len(sys.argv) < 2:
         print("Usage: python validate_sigma.py [--fix] <fichier|dossier> ...")
         sys.exit(1)
@@ -167,4 +198,4 @@ if __name__ == "__main__":
     if not all_valid:
         sys.exit(1)
     else:
-        print(" 😁 Tous les fichiers sont valides.")
+        print("🎉 Tous les fichiers sont valides.")
