@@ -39,6 +39,7 @@ jobs:
       # ✔ Étape 1 : Validation stricte des règles Sigma
       - name: Validate Sigma syntax and structure
         run: |
+          echo " 👍 démarrage de validation "
           python scripts/validate_sigma.py --fix sigma-rules/*.yml  
           echo " 👍 validation terminer"
 
