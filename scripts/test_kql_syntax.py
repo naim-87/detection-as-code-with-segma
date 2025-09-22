@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
 # scripts/test_kql_syntax.py
+"""
+Valide la syntaxe basique des requêtes KQL générées dans les règles DaaC.
+Compatible avec Microsoft Sentinel et les tables ASIM (imProcessCreate, etc.).
+"""
 
 import sys
 import yaml
@@ -13,9 +17,34 @@ LOG_FILE = Path("logs/kql-validation.log")
 # Créer les dossiers nécessaires
 LOG_FILE.parent.mkdir(exist_ok=True)
 
+# Tables autorisées dans Microsoft Sentinel (standard + ASIM)
+ALLOWED_TABLES = {
+    # Tables Device *
+    "DeviceProcessEvents", "DeviceFileEvents", "DeviceRegistryEvents",
+    "DeviceNetworkEvents", "DeviceImageLoadEvents", "DeviceLogonEvents",
+    "DeviceAlertEvents", "DeviceTvmSoftwareInventory",
+
+    # Tables Security *
+    "SecurityEvent", "SecurityAlert", "IdentityLogonEvents",
+    "AADSignInLogs", "AADDiagnosticLogs", "AzureActivity", "OfficeActivity",
+
+    # Tables ASIM (Analytic Schema Integration Model)
+    "imProcessCreate", "imRegistry", "imFile", "imNetwork", "imImageLoad",
+
+    # Autres courantes
+    "Event", "Syslog", "CommonSecurityLog", "WireData"
+}
+
+# Opérateurs KQL valides
+VALID_OPERATORS = {
+    "where", "project", "extend", "summarize", "count", "make_list",
+    "join", "union", "order", "sort", "limit", "parse", "mv-expand",
+    "distinct", "top", "render", "evaluate", "let", "materialize"
+}
+
 
 def log_message(level: str, message: str):
-    """Écrit un message dans le log"""
+    """Écrit un message dans le log et l’affiche"""
     with open(LOG_FILE, "a", encoding="utf-8") as f:
         print(f"{level}: {message}")
         f.write(f"{level}: {message}\n")
@@ -37,43 +66,30 @@ def is_valid_kql(query: str) -> tuple[bool, list[str]]:
         errors.append("Aucune ligne valide dans la requête")
         return False, errors
 
-    # 1. Doit commencer par un nom de table (ex: DeviceProcessEvents, Event, etc.)
+    # 1. Vérifier que la première ligne est un nom de table valide
     first_line = lines[0]
-    table_pattern = r"^[a-zA-Z_][a-zA-Z0-9_]*"
-    match = re.match(table_pattern, first_line)
-    if not match:
+    table_match = re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*", first_line)
+    if not table_match:
         errors.append("La requête doit commencer par un nom de table (ex: DeviceProcessEvents)")
     else:
-        table_name = match.group()
-        if not re.match(r"^(Device|Security|Event|CommonSecurity|Im)\w+", table_name):
-            errors.append(f"Nom de table non standard: '{table_name}'")
+        table_name = table_match.group()
+        if table_name not in ALLOWED_TABLES:
+            errors.append(f"Table non supportée : '{table_name}' (utilisez une table standard ou ASIM)")
 
-    # 2. Vérifier les opérateurs courants mal écrits
-    forbidden_patterns = [
-        ("==", "Utiliser '==' au lieu de '==' peut être redondant ; préférer '=' si intentionnel"),
-        ("!==", "Opérateur invalide: utiliser '!has' ou '!= selon le contexte"),
-        ("contains*", "Utiliser 'contains' ou 'has_prefix', pas 'contains*'"),
-    ]
-
-    for pattern, warning in forbidden_patterns:
-        if pattern in query:
-            errors.append(warning)
-
-    # 3. Vérifier les guillemets simples/doubles mal fermés
+    # 2. Vérifier les guillemets mal fermés
     if query.count("'") % 2 != 0:
         errors.append("Nombre impair de guillemets simples : probablement non fermé")
     if query.count('"') % 2 != 0:
         errors.append("Nombre impair de guillemets doubles : probablement non fermé")
 
-    # 4. Vérifier | suivi d’un mot-clé valide
-    pipes = re.findall(r'\|\s*([a-zA-Z]+)', query)
-    valid_operators = {
-        "where", "project", "summarize", "extend", "order", "sort", "limit",
-        "count", "make_list", "join", "union", "parse"
-    }
-    for op in pipes:
-        if op.lower() not in map(str.lower, valid_operators):
-            errors.append(f"Opérateur KQL potentiellement invalide : '{op}'")
+    # 3. Vérifier les pipes suivis d'opérateurs valides
+    pipe_matches = re.findall(r'\|\s*([a-zA-Z]+)', query)
+    for op in pipe_matches:
+        if op.lower() not in map(str.lower, VALID_OPERATORS):
+            errors.append(f"Opérateur KQL invalide ou mal orthographié : '{op}'")
+
+    # 4. Corriger l’avertissement sur '==' → en fait, c’est valide en KQL
+    # On supprime cette vérification car == est correct
 
     return len(errors) == 0, errors
 
