@@ -8,6 +8,7 @@ on:
       - 'rules/**'
 permissions:
   contents: write
+
 jobs:
   convert-and-commit:
     runs-on: ubuntu-latest
@@ -52,24 +53,23 @@ jobs:
         id: changed
         run: |
           git add rules/
-          if git diff --cached --exit-code; then
+          if git diff --cached --quiet; then
             echo "files_changed=false" >> $GITHUB_OUTPUT
-            echo "No changes detected after add."
+            echo "No changes detected."
           else
             echo "files_changed=true" >> $GITHUB_OUTPUT
-            echo "Detected changes to commit."
+            echo "Changes detected."
           fi
 
       - name: Commit and Push converted rules
+        if: steps.changed.outputs.files_changed == 'true'
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
-          git commit -m "🤖 Auto-convert: Sigma → KQL " || echo "No changes to commit"
-
-          # Pousser tous les commits
+          git commit -m "🤖 Auto-convert: Sigma → DaaC [skip ci]"
           git push origin main
 
-        - name:  Deploy to Microsoft Sentinel
+      - name: Deploy to Microsoft Sentinel
         if: steps.changed.outputs.files_changed == 'true'
         run: |
           python scripts/deploy_to_sentinel.py
