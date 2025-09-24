@@ -93,40 +93,95 @@ def normalize_technique(tech):
 
 
 def ensure_entity_mappings(entity_mappings, rule_query=None):
-    if entity_mappings and isinstance(entity_mappings, list) and len(entity_mappings) >= 1:
-        for em in entity_mappings:
-            if "entityType" in em:
-                em["entityType"] = em["entityType"].lower()
-            if "fieldMappings" in em:
-                for fm in em["fieldMappings"]:
-                    idf = fm.get("identifier", "")
-                    if idf.lower() in ("fullname", "full name"):
-                        fm["identifier"] = "hostName" if em.get("entityType", "") == "host" else "accountName"
-        return entity_mappings
+    """
+    Assure que entityMappings contient 1 à 5 éléments avec des identifiants valides.
+    Corrige les erreurs courantes (ex: hostName → HostName, accountName → Name).
+    """
+    # Identifiants valides selon l'API Sentinel
+    VALID_HOST_IDENTIFIERS = {
+        "DnsDomain", "NTDomain", "HostName", "NetBiosName",
+        "AzureID", "OMSAgentID", "OSFamily", "OSVersion",
+        "IsDomainJoined", "FullName"
+    }
+    VALID_ACCOUNT_IDENTIFIERS = {
+        "Name", "NTDomain", "DnsDomain", "UPNSuffix", "Sid",
+        "AadTenantId", "AadUserId", "PUID", "IsDomainJoined",
+        "DisplayName", "ObjectGuid", "CloudAppAccountId",
+        "IsAnonymized", "FullName"
+    }
 
+    # === Étape 1 : Valider et corriger les mappings existants ===
+    if entity_mappings and isinstance(entity_mappings, list):
+        fixed_mappings = []
+        for em in entity_mappings:
+            if not isinstance(em, dict):
+                continue
+            etype = em.get("entityType")
+            field_mappings = em.get("fieldMappings", [])
+
+            # Correction pour Host
+            if etype == "Host":
+                for fm in field_mappings:
+                    ident = fm.get("identifier")
+                    if ident and ident.lower() == "hostname":
+                        fm["identifier"] = "HostName"
+                    elif ident and ident not in VALID_HOST_IDENTIFIERS:
+                        fm["identifier"] = "HostName"
+
+            # Correction pour Account
+            elif etype == "Account":
+                for fm in field_mappings:
+                    ident = fm.get("identifier")
+                    if ident and ident.lower() in ("accountname", "username", "fullname"):
+                        fm["identifier"] = "Name"
+                    elif ident and ident not in VALID_ACCOUNT_IDENTIFIERS:
+                        fm["identifier"] = "Name"
+
+            fixed_mappings.append(em)
+
+        # Retourner seulement s’il y a au moins 1 mapping valide
+        if fixed_mappings:
+            return fixed_mappings[:5]  # Max 5
+
+    # === Étape 2 : Création automatique si vide ou invalide ===
     placeholder = []
     q = (rule_query or "").lower()
-    if "computer" in q or "hostname" in q or "host" in q:
+
+    # Détecter Computer / Host
+    if any(kw in q for kw in ["computer", "hostname", "devicename", "machinename"]):
         placeholder.append({
-            "entityType": "host",
-            "fieldMappings": [{"identifier": "hostName", "columnName": "Computer"}]
-        })
-    if "account" in q or "user" in q or "username" in q:
-        placeholder.append({
-            "entityType": "account",
-            "fieldMappings": [{"identifier": "accountName", "columnName": "AccountName"}]
-        })
-    if "srcip" in q or "sourceip" in q or "clientip" in q:
-        placeholder.append({
-            "entityType": "ip",
-            "fieldMappings": [{"identifier": "address", "columnName": "SrcIp"}]
+            "entityType": "Host",
+            "fieldMappings": [
+                {"identifier": "HostName", "columnName": "Computer"}
+            ]
         })
 
+    # Détecter Account / User
+    if any(kw in q for kw in ["accountname", "username", "user", "logonuser"]):
+        placeholder.append({
+            "entityType": "Account",
+            "fieldMappings": [
+                {"identifier": "Name", "columnName": "AccountName"}
+            ]
+        })
+
+    # Détecter IP
+    if any(kw in q for kw in ["srcip", "dstip", "sourceip", "clientip", "remoteip"]):
+        placeholder.append({
+            "entityType": "IP",
+            "fieldMappings": [
+                {"identifier": "Address", "columnName": "IpAddress"}
+            ]
+        })
+
+    # Fallback minimal obligatoire
     if not placeholder:
         log_message("WARNING", "No entityMappings found; adding minimal placeholder.")
         placeholder = [{
-            "entityType": "host",
-            "fieldMappings": [{"identifier": "hostName", "columnName": "Computer"}]
+            "entityType": "Host",
+            "fieldMappings": [
+                {"identifier": "HostName", "columnName": "Computer"}
+            ]
         }]
 
     return placeholder[:5]
