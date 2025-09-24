@@ -16,6 +16,7 @@ SUBSCRIPTION_ID = os.getenv("SUBSCRIPTION_ID")
 RESOURCE_GROUP = os.getenv("RESOURCE_GROUP")
 WORKSPACE_NAME = os.getenv("WORKSPACE_NAME")
 
+# 🔧 CORRIGÉ : Suppression des espaces dans les URLs
 AUTH_URL = f"https://login.microsoftonline.com/{TENANT_ID}/oauth2/v2.0/token"
 API_URL = f"https://management.azure.com/subscriptions/{SUBSCRIPTION_ID}/resourceGroups/{RESOURCE_GROUP}/providers/Microsoft.OperationalInsights/workspaces/{WORKSPACE_NAME}/providers/Microsoft.SecurityInsights/alertRules"
 
@@ -32,6 +33,7 @@ def log_message(level, msg):
 
 
 def get_access_token():
+    # 🔧 CORRIGÉ : Suppression des espaces dans le scope
     payload = {
         'client_id': CLIENT_ID,
         'client_secret': CLIENT_SECRET,
@@ -52,10 +54,49 @@ def deploy_rule(rule_data, token):
     rule_id = rule_data["id"]
     url = f"{API_URL}/{rule_id}?api-version=2023-02-01"
 
-    # Mapping DaaC → Sentinel API
-    severity_map = {"Low": "Informational", "Medium": "Warning", "High": "High", "Critical": "Critical"}
-    severity = severity_map.get(rule_data["severity"].capitalize(), "Medium")
+    # ✅ 1. Gravité
+    severity_map = {
+        "Low": "Low",
+        "Medium": "Medium",
+        "High": "High",
+        "Critical": "Critical",
+        "Warning": "Medium"
+    }
+    severity = severity_map.get(rule_data.get("severity", "Medium").capitalize(), "Medium")
 
+    # ✅ 2. Tactiques
+    MITRE_TACTIC_MAP = {
+        "initial-access": "InitialAccess",
+        "execution": "Execution",
+        "persistence": "Persistence",
+        "privilege-escalation": "PrivilegeEscalation",
+        "defense-evasion": "DefenseEvasion",
+        "credential-access": "CredentialAccess",
+        "discovery": "Discovery",
+        "lateral-movement": "LateralMovement",
+        "collection": "Collection",
+        "command-and-control": "CommandAndControl",
+        "exfiltration": "Exfiltration",
+        "impact": "Impact"
+    }
+    tactics = [
+        MITRE_TACTIC_MAP.get(t.lower().replace('_', '-'), t.capitalize())
+        for t in rule_data.get("tactics", [])
+    ]
+
+    # ✅ 3. Techniques
+    techniques = [
+        tech.split('.')[-1] if '.' in tech else tech
+        for tech in rule_data.get("techniques", [])
+    ]
+
+    # ✅ 4. Headers
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+
+    # ✅ 5. Payload
     payload = {
         "etag": "*",
         "kind": "Scheduled",
@@ -71,8 +112,8 @@ def deploy_rule(rule_data, token):
             "triggerThreshold": 0,
             "suppressionDuration": "PT5H",
             "suppressionEnabled": False,
-            "tactics": [t.capitalize() for t in rule_data.get("tactics", [])],
-            "techniques": rule_data.get("techniques", []),
+            "tactics": tactics,
+            "techniques": techniques,
             "incidentConfiguration": {
                 "createIncident": True,
                 "groupingConfiguration": {
@@ -84,13 +125,17 @@ def deploy_rule(rule_data, token):
             },
             "alertRuleTemplateName": None,
             "customDetails": None,
-            "entityMappings": []
+            "entityMappings": [
+                {
+                    "entityType": "Host",
+                    "fieldMappings": [{"identifier": "FullName", "columnName": "Computer"}]
+                },
+                {
+                    "entityType": "Account",
+                    "fieldMappings": [{"identifier": "FullName", "columnName": "AccountName"}]
+                }
+            ]
         }
-    }
-
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json"
     }
 
     try:
