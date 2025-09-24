@@ -2,7 +2,7 @@
 # scripts/test_kql_syntax.py
 """
 Valide la syntaxe basique des requêtes KQL générées dans les règles DaaC.
-Compatible avec Microsoft Sentinel et les tables ASIM (imProcessCreate, etc.).
+Compatible avec Microsoft Sentinel et les tables ASIM .
 """
 
 import sys
