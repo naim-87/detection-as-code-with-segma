@@ -23,7 +23,7 @@ LOG_FILE = Path("logs/conversion.log")
 DAAC_DIR.mkdir(exist_ok=True)
 LOG_FILE.parent.mkdir(exist_ok=True)
 
-# Mapping des catégories Sigma non standard -> catégories standard
+# Mapping des catégories Sigma non standard → catégories standard
 CATEGORY_MAPPING = {
     # PowerShell
     "ps_classic_start": "process_creation",
@@ -55,13 +55,71 @@ CATEGORY_MAPPING = {
     "Data": "CommandLine",
 }
 
+# Mapping des champs Sigma → ASIM (KQL)
+FIELD_MAPPING = {
+    # --- Processus ---
+    "Image": "FileName",                          # ou ProcessFileName
+    "CommandLine": "ProcessCommandLine",
+    "CurrentDirectory": "FolderPath",
+    "ParentCommandLine": "InitiatingProcessCommandLine",
+    "ParentImage": "InitiatingProcessFolderPath",
+    "ParentProcessName": "InitiatingProcessFileName",
+    "CreatorProcessName": "InitiatingProcessFileName",
+    "Hashes": "SHA1",  # À adapter selon contexte (MD5, SHA256 possible)
+
+    # --- Réseau ---
+    "DestinationIp": "RemoteIP",
+    "DestinationPort": "RemotePort",
+    "SourceIp": "LocalIP",
+    "SourcePort": "LocalPort",
+    "Protocol": "Protocol",
+
+    # --- DNS ---
+    "QueryName": "DnsQuery",
+    "QueryResults": "DnsResponse",
+
+    # --- Registre ---
+    "TargetObject": "RegistryKey",
+    "Details": "RegistryValueData",
+    "NewName": "RegistryValueName",
+    "EventType": "RegistryOperation",  # Add/Delete/Set
+
+    # --- Fichiers ---
+    "TargetFilename": "FileName",
+    "FileName": "FileName",
+    "FilePath": "FolderPath",
+    "FileExtension": "FileExtension",
+
+    # --- Authentification ---
+    "SubjectUserName": "AccountName",
+    "SubjectUserSid": "AccountSid",
+    "TargetUserName": "AccountName",
+    "TargetUserSid": "AccountSid",
+    "TargetDomainName": "DomainName",
+    "IpAddress": "RemoteIP",
+    "LogonType": "LogonType",
+
+    # --- Pilotes ---
+    "LoadedImage": "FileName",
+    "Signature": "Signer",
+
+    # --- Données diverses ---
+    "Data": "CommandLine",
+    "IntegrityLevel": "ProcessIntegrityLevel",
+}
+
 
 def log_conversion(message: str):
+    """Écrit un message dans le fichier de log avec horodatage."""
     with open(LOG_FILE, "a", encoding="utf-8") as f:
         f.write(f"{datetime.now().isoformat()} | {message}\n")
 
 
 def load_schema():
+    """Charge le schéma JSON pour validation des règles DaaC."""
+    if not SCHEMA_PATH.exists():
+        print(f"❌ Schema file not found: {SCHEMA_PATH}")
+        sys.exit(1)
     with open(SCHEMA_PATH, "r", encoding="utf-8") as f:
         return json.load(f)
 
@@ -80,7 +138,7 @@ def validate_rule(rule: dict, rule_name: str, schema: dict) -> bool:
 
 def generate_daac_id(sigma_id: str, source: str = "sigma") -> str:
     """
-    Génère un ID DaaC avec padding à zéro :
+    Génère un ID DaaC formaté :
     - SIGMA-1234-567 → SIGMA-XXXX-YYY (4d-3d)
     - SOC-2025-042 → SOC-YYYY-ZZZ (4d-3d)
     """
@@ -101,10 +159,14 @@ def generate_daac_id(sigma_id: str, source: str = "sigma") -> str:
 
 
 def convert_sigma_file(sigma_path: Path, schema: dict):
+    """Convertit un fichier de règle Sigma en règle DaaC (YAML + KQL)."""
     try:
         # 1. Lire le fichier Sigma
         with open(sigma_path, 'r', encoding='utf-8') as f:
             sigma_data = yaml.safe_load(f)
+
+        if not sigma_data:
+            raise ValueError("Fichier YAML vide ou invalide")
 
         # === PATCH AUTOMATIQUE du logsource.category ===
         if "logsource" in sigma_data:
@@ -114,11 +176,13 @@ def convert_sigma_file(sigma_path: Path, schema: dict):
                 sigma_data["logsource"]["category"] = CATEGORY_MAPPING[category]
         # ==============================================
 
-        # Valider l'ID Sigma
+        # Valider/générer un ID UUID valide
         original_id = sigma_data.get("id", "")
         if not original_id or not re.match(r"^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$", original_id):
             print(f"⚠️ ID invalide ou manquant pour {sigma_path.name}, génération automatique")
-            sigma_data["id"] = str(uuid.uuid4())
+            generated_uuid = str(uuid.uuid4())
+            sigma_data["id"] = generated_uuid
+            log_conversion(f"GENERATED_ID: {sigma_path.name} → {generated_uuid}")
 
         rule_title = sigma_data.get("title", sigma_path.stem)
         log_conversion(f"CONVERTING: {sigma_data['id']} - {rule_title}")
@@ -133,42 +197,47 @@ def convert_sigma_file(sigma_path: Path, schema: dict):
             else:
                 raise
 
-        # 3. Backend KQL avec ASIM
+        # 3. Backend KQL avec pipeline ASIM
         backend = KustoBackend(processing_pipeline=sentinel_asim_pipeline())
         kql_queries = backend.convert(sigma_collection)
         if not kql_queries:
             raise ValueError("Aucune requête KQL générée")
-        
-        # 4. 🔧 PATCH : Remplacer Im_ → _Im_ dans la requête KQL
+
         kql_query = kql_queries[0]
-        kql_query = re.sub(r'\b(Im_[A-Za-z]+)\b', r'_\1', kql_query)  # Im_X → _Im_X
 
+        # 🔧 PATCH 1 : Corriger les champs Im_Field → _Im_Field
+        kql_query = re.sub(r'\b(Im_[A-Za-z_]+)\b', r'_\1', kql_query)
 
-        # 4. Extraire MITRE
+        # 🔧 PATCH 2 : Appliquer FIELD_MAPPING (Sigma → ASIM)
+        for sigma_field, asim_field in FIELD_MAPPING.items():
+            # Remplacer uniquement les mots entiers (ex: Image, pas ImagePath)
+            kql_query = re.sub(rf'\b{re.escape(sigma_field)}\b', asim_field, kql_query)
+
+        # 4. Extraire MITRE ATT&CK
         tactics, techniques, tags = [], [], []
-        for t in sigma_data.get("tags", []):
-            t_upper = t.upper()
+        for tag in sigma_data.get("tags", []):
+            t_upper = tag.upper()
             if re.match(r"^ATTACK\.T[0-9]{4}(\.[0-9]{3})?$", t_upper):
                 techniques.append(t_upper)
             elif t_upper.startswith("ATTACK."):
-                tactic = t.split(".")[-1].lower()
+                tactic = tag.split(".")[-1].lower()
                 if tactic not in tactics:
                     tactics.append(tactic)
             else:
-                tags.append(t)
+                tags.append(tag)
 
-        # 6. Générer l'ID DaaC
+        # 5. Générer l'ID DaaC
         daac_id = generate_daac_id(sigma_data["id"], source="sigma")
 
-        # 7. Créer la règle DaaC
+        # 6. Créer la règle DaaC
         daac_rule = {
             "id": daac_id,
             "name": rule_title,
             "description": sigma_data.get("description", "No description"),
-            "tactics": tactics,
-            "techniques": techniques,
+            "tactics": sorted(list(set(tactics))),  # Éviter les doublons
+            "techniques": sorted(list(set(techniques))),
             "severity": sigma_data.get("level", "medium").capitalize(),
-            "query": kql_query,
+            "query": kql_query.strip(),
             "status": "test",
             "version": 1.0,
             "clients": ["*"],
@@ -177,11 +246,12 @@ def convert_sigma_file(sigma_path: Path, schema: dict):
             "last_modified": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S"),
         }
 
-        # 8. Validation du schéma
+        # 7. Validation du schéma
         if not validate_rule(daac_rule, sigma_path.name, schema):
-            sys.exit(1)
+            log_conversion(f"VALIDATION_FAILED: {sigma_path.name}")
+            return  # Ne pas sauvegarder si invalide
 
-        # 9. Sauvegarder
+        # 8. Sauvegarder la règle DaaC
         output_file = DAAC_DIR / f"{daac_id}.yml"
         with open(output_file, "w", encoding="utf-8") as f:
             f.write(f"# source: {sigma_path.name}\n")
@@ -194,10 +264,10 @@ def convert_sigma_file(sigma_path: Path, schema: dict):
         error_msg = f"FAILED: {sigma_path.name} → {str(e)}"
         log_conversion(f"ERROR: {error_msg}")
         print(f"❌ {error_msg}")
-        sys.exit(1)
 
 
 def main():
+    """Point d'entrée principal."""
     if not SIGMA_DIR.exists():
         print(f"❌ Directory not found: {SIGMA_DIR}")
         sys.exit(1)
@@ -213,8 +283,11 @@ def main():
         print("📭 No .yml files found in sigma-rules/")
         return
 
+    print(f"🔍 Found {len(sigma_files)} Sigma rules. Starting conversion...\n")
     for file in sigma_files:
         convert_sigma_file(file, schema)
+
+    print(f"\n🎉 Conversion completed. Logs: {LOG_FILE}")
 
 
 if __name__ == "__main__":
