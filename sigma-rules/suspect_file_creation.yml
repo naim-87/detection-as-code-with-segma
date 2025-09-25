@@ -1,24 +1,41 @@
 title: Suspicious Process Injection via Remote Memory Operations
 id: 1a2b3c4d-5e6f-7a8b-9c0d-1234567890ac
 status: test
-description: Detects potential process injection using sequence of OpenProcess, VirtualAllocEx, WriteProcessMemory, CreateRemoteThread
+description: Detects potential process injection using remote thread creation in a target process (e.g., CreateRemoteThread). Based on EventID 8 (Sysmon) or equivalent.
 author: RAISEGARD
 references:
   - https://attack.mitre.org/techniques/T1055/
 logsource:
-  category: process_creation
+  category: process_access
   product: windows
+  # Supposons que vous utilisez Sysmon Event ID 8 ou un équivalent
 detection:
-  selection_api:
-    EventID: 8  # Sysmon Event ID for CreateRemoteThread
-    TargetImage|endswith: '\\svchost.exe'  # ou autre processus légitime cible
-    StartFunction: 'ntdll.dll!RtlUserThreadStart'
-  filter_legit:
-    CreatorProcessName:
-      - 'KnownUpdater.exe'
-      - 'LegitInstaller.exe'
-  condition: selection_api and not filter_legit
+  selection:
+    EventID: 8  # Sysmon: CreateRemoteThread detected
+    GrantedAccess: '*0x1000*'  # Suspect access rights: THREAD_CREATE
+    TargetImage|endswith:
+      - '\svchost.exe'
+      - '\lsass.exe'
+      - '\explorer.exe'
+      - '\winlogon.exe'
+    # Optionnel : vérifier que le thread démarre dans une zone mémoire suspecte
+    StartFunction|contains:
+      - 'ntdll.dll!RtlPUserThreadStart'
+      - 'kernel32.dll!BaseThreadInitThunk'
+
+  filter_known_tools:
+    ActingProcessName:
+      - 'known_tool.exe'
+      - 'trusted_installer.exe'
+
+  filter_by_commandline:
+    InitiatingProcessCommandLine|contains|all:
+      - 'C:\Program Files\LegitSoftware'
+      - '.exe'
+
+  condition: selection and not filter_known_tools and not filter_by_commandline
+
 level: high
 tags:
   - attack.technique:T1055
-  - attack.tactic:TA0005  # Defense Evasion / Privilege Escalation
+  - attack.tactic:TA0005
