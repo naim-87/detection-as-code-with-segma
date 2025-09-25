@@ -221,7 +221,7 @@ def convert_sigma_file(sigma_path: Path, schema: dict):
             sentinel_table = "DeviceProcessEvents"
 
         # === 2. Corriger les champs invalides AVANT conversion ===
-        if "detection" in sigma_
+        if "detection" in sigma_data:
             sigma_data["detection"] = correct_invalid_fields(sigma_data["detection"], sentinel_table)
 
         # === 3. Générer ou corriger l'ID ===
