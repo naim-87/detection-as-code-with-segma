@@ -1,0 +1,31 @@
+title: Dumping des identifiants via Mimikatz - dpapi::cred
+id: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
+status: test
+description: |
+  Détecte l'utilisation de la commande 'mimikatz dpapi::cred' pour extraire les identifiants du gestionnaire d'informations d'identification Windows.
+author: SOC Team - RAISEGUARD
+date: 2025-04-05
+modified: 2025-04-05
+
+logsource:
+    category: process_creation
+    product: windows
+
+detection:
+    selection_image:
+        Image|endswith: '\mimikatz.exe'
+    selection_cli:
+        CommandLine|contains: 'dpapi::cred'
+
+    condition: selection_image and selection_cli
+
+falsepositives:
+    - Utilisation légitime par un administrateur (très rare)
+    - Outils de forensic autorisés
+
+level: high
+
+tags:
+    - attack.credential-access
+    - attack.t1003.005
+    - T1003.005

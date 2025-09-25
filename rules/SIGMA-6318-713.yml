@@ -1,0 +1,18 @@
+# source: test1.yml
+id: SIGMA-6318-713
+name: Test Rule
+description: Test
+tactics:
+- execution
+techniques: []
+severity: High
+query: 'imProcessCreate
+
+  | where TargetProcessCommandLine contains "test"'
+status: test
+version: 1.0
+clients:
+- '*'
+tags: []
+author: community
+last_modified: '2025-09-24T08:16:08'

@@ -1,0 +1,14 @@
+title: Test Rule - PowerShell Execution
+id: test-rule-powershell-exec
+status: test
+description: Règle de test pour valider le pipeline DaaC
+author: SOC Team
+date: 2025/09/24
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith: '\powershell.exe'
+  condition: selection
+level: medium
