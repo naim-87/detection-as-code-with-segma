@@ -7,7 +7,7 @@ tactics:
 techniques:
 - ATTACK.T1059
 severity: High
-query: 'imProcessCreate
+query: '_Im_ProcessCreate
 
   | where TargetProcessCommandLine contains "Invoke-WebRequest"'
 status: test
