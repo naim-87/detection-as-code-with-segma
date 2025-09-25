@@ -155,7 +155,7 @@ def convert_sigma_file(sigma_path: Path, schema: dict):
         with open(sigma_path, 'r', encoding='utf-8') as f:
             sigma_data = yaml.safe_load(f)
 
-        if not sigma_
+        if not sigma_data:
             raise ValueError("Fichier YAML vide ou invalide")
 
         log_conversion(f"CONVERTING: {sigma_path.name}")
