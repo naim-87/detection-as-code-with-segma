@@ -48,7 +48,23 @@ jobs:
             python scripts/validate_rule.py "$rule" schemas/rule-schema.json
             if [ $? -ne 0 ]; then exit 1; fi
           done
+     
+     
+         # ✅ NOUVELLE ÉTAPE : Déplacer les règles VALIDÉES vers /C_V_D_rules/
+      - name: 📁 Move validated Sigma rules to /C_V_D_rules/
+        run: |
+          echo "📁 Archivage des règles Sigma validées..."
+          
+          # Déplace toutes les règles de sigma-rules/ vers C_V_D_rules/
+          mv sigma-rules/*.yml C_V_D_rules/ 2>/dev/null || echo "Aucune règle à déplacer ou déjà déplacée."
+          git add C_V_D_rules/ sigma-rules/
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git commit -m "📦 Archive: sigma-rules → C_V_D_rules [skip ci]" || echo "No changes to commit"
+          git push origin main
 
+
+        
       - name: Check if rules changed
         id: changed
         run: |

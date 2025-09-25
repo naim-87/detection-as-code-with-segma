@@ -5,7 +5,6 @@ Valide la syntaxe basique des requêtes KQL générées dans les règles DaaC.
 Compatible avec :
 - Microsoft Sentinel (tables standard)
 - MDE (Device*)
-- ET tables ASIM personnalisées (_Im_*) utilisées dans l'environnement MSSP
 """
 
 import sys
