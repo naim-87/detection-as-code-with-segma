@@ -1,0 +1,17 @@
+# source: PowerShell Execution.yml
+id: SIGMA-8961-564
+name: Test Rule - PowerShell Execution
+description: Règle de test pour valider le pipeline DaaC
+tactics: []
+techniques: []
+severity: Medium
+query: 'DeviceProcessEvents
+
+  | where TargetProcessName endswith "\\powershell.exe"'
+status: test
+version: 1.0
+clients:
+- '*'
+tags: []
+author: SOC Team
+last_modified: '2025-09-25T21:37:30'

@@ -1,0 +1,19 @@
+# source: test2.yml
+id: SIGMA-1234-561
+name: Suspicious PowerShell Command
+description: Detects suspicious PowerShell command execution containing "Invoke-WebRequest"
+tactics:
+- execution
+techniques:
+- ATTACK.T1059
+severity: High
+query: 'DeviceProcessEvents
+
+  | where TargetProcessCommandLine contains "Invoke-WebRequest"'
+status: test
+version: 1.0
+clients:
+- '*'
+tags: []
+author: dhif
+last_modified: '2025-09-25T21:37:30'

@@ -1,0 +1,18 @@
+# source: test1.yml
+id: SIGMA-9067-799
+name: Test Rule
+description: Test
+tactics:
+- execution
+techniques: []
+severity: High
+query: 'DeviceProcessEvents
+
+  | where TargetProcessCommandLine contains "test"'
+status: test
+version: 1.0
+clients:
+- '*'
+tags: []
+author: community
+last_modified: '2025-09-25T21:37:30'

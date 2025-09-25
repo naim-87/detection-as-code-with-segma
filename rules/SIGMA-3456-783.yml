@@ -1,0 +1,21 @@
+# source: test5.yml
+id: SIGMA-3456-783
+name: Suspicious Whoami Command Execution
+description: Detects suspicious use of whoami.exe for user or system reconnaissance
+tactics: []
+techniques:
+- ATTACK.T1033
+severity: Medium
+query: 'DeviceProcessEvents
+
+  | where ((TargetProcessCommandLine contains "whoami" or TargetProcessCommandLine
+  contains "whoami /all" or TargetProcessCommandLine contains "whoami /priv") and
+  TargetProcessName endswith "\\whoami.exe") and (not((TargetProcessCommandLine contains
+  "whoami /upn" or TargetProcessCommandLine contains "whoami /logonid")))'
+status: test
+version: 1.0
+clients:
+- '*'
+tags: []
+author: dhif
+last_modified: '2025-09-25T21:37:30'

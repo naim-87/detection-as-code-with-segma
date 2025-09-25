@@ -1,0 +1,25 @@
+# source: test4.yml
+id: SIGMA-2345-672
+name: Suspicious Net Command Execution for Enumeration
+description: Detects suspicious use of net.exe for user or group enumeration, potentially
+  indicating reconnaissance
+tactics:
+- discovery
+techniques:
+- ATTACK.T1069
+- ATTACK.T1087
+severity: High
+query: 'DeviceProcessEvents
+
+  | where ((TargetProcessCommandLine contains "net user" or TargetProcessCommandLine
+  contains "net group" or TargetProcessCommandLine contains "net localgroup") and
+  TargetProcessName endswith "\\net.exe") and (not((TargetProcessCommandLine contains
+  "net user administrator /domain" or TargetProcessCommandLine contains "net group
+  \"Domain Admins\" /domain")))'
+status: test
+version: 1.0
+clients:
+- '*'
+tags: []
+author: dhif
+last_modified: '2025-09-25T21:37:30'

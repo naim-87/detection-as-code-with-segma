@@ -1,0 +1,24 @@
+# source: Dumping des identifiants via Mimikatz.yml
+id: SIGMA-7890-123
+name: Dumping des identifiants via Mimikatz - dpapi::cred
+description: 'Détecte l''utilisation de la commande ''mimikatz dpapi::cred'' pour
+  extraire les identifiants du gestionnaire d''informations d''identification Windows.
+
+  '
+tactics:
+- credential-access
+techniques:
+- ATTACK.T1003.005
+severity: High
+query: 'DeviceProcessEvents
+
+  | where TargetProcessName endswith "\\mimikatz.exe" and TargetProcessCommandLine
+  contains "dpapi::cred"'
+status: test
+version: 1.0
+clients:
+- '*'
+tags:
+- T1003.005
+author: SOC Team - RAISEGUARD
+last_modified: '2025-09-25T21:37:30'

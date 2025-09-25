@@ -1,0 +1,19 @@
+# source: rule10.yml
+id: SIGMA-1218-616
+name: Potential NetWire RAT Activity - Registry
+description: Detects registry keys related to NetWire RAT
+tactics:
+- defense-evasion
+techniques:
+- ATTACK.T1112
+severity: High
+query: 'DeviceRegistryEvents
+
+  | where RegistryOperation =~ "RegistryKeyCreated" and RegistryKey contains "\\software\\NetWire"'
+status: test
+version: 1.0
+clients:
+- '*'
+tags: []
+author: Christopher Peacock
+last_modified: '2025-09-25T21:37:30'
