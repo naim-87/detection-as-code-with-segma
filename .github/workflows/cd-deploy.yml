@@ -54,7 +54,7 @@ jobs:
       - name: 📁 Move validated Sigma rules to /C_V_D_rules/
         run: |
           echo "📁 Archivage des règles Sigma validées..."
-          
+          mkdir -p C_V_D_rules
           # Déplace toutes les règles de sigma-rules/ vers C_V_D_rules/
           mv sigma-rules/*.yml C_V_D_rules/ 2>/dev/null || echo "Aucune règle à déplacer ou déjà déplacée."
           git add C_V_D_rules/ sigma-rules/
