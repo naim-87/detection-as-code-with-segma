@@ -2,7 +2,10 @@
 # scripts/test_kql_syntax.py
 """
 Valide la syntaxe basique des requêtes KQL générées dans les règles DaaC.
-Compatible avec Microsoft Sentinel, MDE et les tables ASIM (Im_*).
+Compatible avec :
+- Microsoft Sentinel (tables standard)
+- MDE (Device*)
+- ET tables ASIM personnalisées (_Im_*) utilisées dans l'environnement MSSP
 """
 
 import sys
@@ -25,9 +28,9 @@ def log_message(level: str, message: str):
         f.write(f"{level}: {message}\n")
 
 
-# ✅ Tables autorisées dans Microsoft Sentinel (valides et officielles)
+# ✅ Tables autorisées : seules les versions avec _Im_* sont acceptées
 ALLOWED_TABLES = {
-    # --- Tables Device (Microsoft Defender for Endpoint) ---
+    # --- Tables Device (MDE) ---
     "DeviceProcessEvents",
     "DeviceFileEvents",
     "DeviceRegistryEvents",
@@ -46,8 +49,7 @@ ALLOWED_TABLES = {
     "AzureActivity",
     "OfficeActivity",
 
-    # --- Tables ASIM (Analytic Schema Integration Model) ---
-    # Utilisées via sentinel_asim_pipeline()
+    # --- Tables ASIM personnalisées (_Im_*) ---
     "_Im_ProcessCreate",
     "_Im_Registry",
     "_Im_FileEvent",
@@ -65,12 +67,60 @@ ALLOWED_TABLES = {
     "WireData"
 }
 
+# 🔄 Normalisation des alias fréquents vers les noms réels (_Im_*)
+ASIM_NORMALIZATION = {
+    "imProcessCreate": "_Im_ProcessCreate",
+    "imRegistry": "_Im_Registry",
+    "imFile": "_Im_FileEvent",
+    "imNetwork": "_Im_NetworkSession",
+    "imImageLoad": "_Im_ImageLoad",
+    "imLogon": "_Im_Logon",
+    "imDnsQuery": "_Im_DnsQuery",
+    "imPowerShell": "_Im_PowerShell",
+    "imWinEvent": "_Im_WinEvent"
+}
+
 # ✅ Opérateurs KQL valides
 VALID_OPERATORS = {
     "where", "project", "extend", "summarize", "count", "make_list",
     "join", "union", "order", "sort", "limit", "parse", "mv-expand",
-    "distinct", "top", "render", "evaluate", "let", "materialize", "has"
+    "distinct", "top", "render", "evaluate", "let", "materialize", "has",
+    "contains", "startswith", "endswith", "has_any", "in"
 }
+
+
+def normalize_table_name(table: str) -> str:
+    """Normalise les noms de tables : imProcessCreate → _Im_ProcessCreate"""
+    table = table.strip()
+    if not table:
+        return ""
+    if table in ALLOWED_TABLES:
+        return table
+    return ASIM_NORMALIZATION.get(table.lower(), table)
+
+
+def extract_tables(query: str) -> list[str]:
+    """Extrait toutes les tables utilisées dans la requête (première + union)"""
+    tables = []
+    lines = [line.strip() for line in query.split('\n') if line.strip()]
+
+    for line in lines:
+        if line.startswith("//") or line.lower().startswith(("let ", "range ")):
+            continue
+        match = re.match(r"^([_a-zA-Z][_a-zA-Z0-9]*)", line)
+        if match:
+            tables.append(match.group(1))
+            break  # Première table principale
+
+    # Recherche les unions
+    union_matches = re.findall(r"union\s+([_a-zA-Z][_a-zA-Z0-9]*(?:\s*,\s*[_a-zA-Z][_a-zA-Z0-9]*)*)", query)
+    for match in union_matches:
+        for t in match.split(","):
+            t_clean = t.strip()
+            if t_clean:
+                tables.append(t_clean)
+
+    return tables
 
 
 def is_valid_kql(query: str) -> tuple[bool, list[str]]:
@@ -84,36 +134,17 @@ def is_valid_kql(query: str) -> tuple[bool, list[str]]:
         errors.append("Requête vide ou manquante")
         return False, errors
 
-    lines = [line.strip() for line in query.strip().split('\n') if line.strip()]
-    if not lines:
-        errors.append("Aucune ligne valide dans la requête")
-        return False, errors
-
-    # 1. Extraire la première table (après let/range éventuel)
-    first_table_line = None
-    for line in lines:
-        stripped = line.strip()
-        # Ignorer les commentaires et lignes de préparation
-        if stripped.startswith("//") or stripped.lower().startswith(("let ", "range ")):
-            continue
-        if stripped:
-            first_table_line = stripped
-            break
-
-    if not first_table_line:
-        errors.append("Impossible de trouver une table cible (ex: DeviceProcessEvents)")
-        return False, errors
-
-    # Extraire le nom de table
-    table_match = re.match(r"^([a-zA-Z_][a-zA-Z0-9_]*)", first_table_line)
-    if not table_match:
-        errors.append("La requête doit commencer par un nom de table (ex: DeviceProcessEvents)")
+    # 1. Extraire les tables
+    tables = extract_tables(query)
+    if not tables:
+        errors.append("Impossible de trouver une table cible (ex: _Im_ProcessCreate)")
     else:
-        table_name = table_match.group(1)
-        if table_name not in ALLOWED_TABLES:
-            suggestions = [t for t in ALLOWED_TABLES if table_name.lower() in t.lower()]
-            hint = f" Peut-être vouliez-vous : {suggestions[:2]} ?" if suggestions else ""
-            errors.append(f"Table non supportée : '{table_name}'{hint}")
+        for t in tables:
+            norm = normalize_table_name(t)
+            if norm not in ALLOWED_TABLES:
+                suggestions = [tbl for tbl in ALLOWED_TABLES if t.lower() in tbl.lower()]
+                hint = f" Peut-être vouliez-vous : {suggestions[:2]} ?" if suggestions else ""
+                errors.append(f"Table non supportée : '{t}'{hint}")
 
     # 2. Vérifier les guillemets mal fermés
     if query.count("'") % 2 != 0:
@@ -122,10 +153,14 @@ def is_valid_kql(query: str) -> tuple[bool, list[str]]:
         errors.append("Nombre impair de guillemets doubles : probablement non fermé")
 
     # 3. Vérifier les pipes suivis d'opérateurs valides
-    pipe_matches = re.findall(r'\|\s*([a-zA-Z]+)', query)
+    pipe_matches = re.findall(r'\|\s*([a-zA-Z_]+)', query)
     for op in pipe_matches:
         if op.lower() not in map(str.lower, VALID_OPERATORS):
             errors.append(f"Opérateur KQL invalide ou mal orthographié : '{op}'")
+
+    # 4. Vérifier les join sans "on"
+    if "join" in query and " on " not in query:
+        errors.append("Clause 'join' sans 'on' détectée")
 
     return len(errors) == 0, errors
 

@@ -23,7 +23,7 @@ LOG_FILE = Path("logs/conversion.log")
 DAAC_DIR.mkdir(exist_ok=True)
 LOG_FILE.parent.mkdir(exist_ok=True)
 
-# Mapping des catégories Sigma non standard -----> catégories standard
+# Mapping des catégories Sigma non standard -> catégories standard
 CATEGORY_MAPPING = {
     # PowerShell
     "ps_classic_start": "process_creation",
@@ -50,9 +50,9 @@ CATEGORY_MAPPING = {
     # Authentification
     "authentication": "logon_logoff",
     "logon": "logon_logoff",
-    # data
+
+    # Data field fix
     "Data": "CommandLine",
-    
 }
 
 
@@ -85,28 +85,19 @@ def generate_daac_id(sigma_id: str, source: str = "sigma") -> str:
     - SOC-2025-042 → SOC-YYYY-ZZZ (4d-3d)
     """
     if source == "sigma" and sigma_id:
-        # Extraire des nombres à partir de l'UUID ou d'un ID structuré
-        digits = re.sub(r"\D", "", sigma_id)  # Garde uniquement les chiffres
+        digits = re.sub(r"\D", "", sigma_id)
         if len(digits) >= 7:
-            prefix = int(digits[:4]) % 10000  # 4 chiffres max
-            suffix = int(digits[4:7]) % 1000   # 3 chiffres max
+            prefix = int(digits[:4]) % 10000
+            suffix = int(digits[4:7]) % 1000
             return f"SIGMA-{prefix:04d}-{suffix:03d}"
-
         elif len(digits) >= 3:
-            prefix = (hash(digits) % 9000 + 1000) % 10000  # 4 chiffres
+            prefix = (hash(digits) % 9000 + 1000) % 10000
             suffix = int(digits[-3:]) % 1000
             return f"SIGMA-{prefix:04d}-{suffix:03d}"
 
-    # Fallback pour Sigma ou règles custom
-    if source == "sigma":
-        base = abs(hash(sigma_id or str(uuid.uuid4()))) % 1000
-        year = datetime.now().year % 10000
-        return f"SIGMA-{year:04d}-{base:03d}"
-
-    # Pour les règles internes (à l'avenir)
-    base = abs(hash(str(datetime.now()))) % 1000
-    year = datetime.now().year
-    return f"SOC-{year}-{base:03d}"
+    base = abs(hash(sigma_id or str(uuid.uuid4()))) % 1000
+    year = datetime.now().year % 10000
+    return f"SIGMA-{year:04d}-{base:03d}"
 
 
 def convert_sigma_file(sigma_path: Path, schema: dict):
@@ -123,7 +114,7 @@ def convert_sigma_file(sigma_path: Path, schema: dict):
                 sigma_data["logsource"]["category"] = CATEGORY_MAPPING[category]
         # ==============================================
 
-        # Valider l'ID Sigma et corriger s'il est invalide
+        # Valider l'ID Sigma
         original_id = sigma_data.get("id", "")
         if not original_id or not re.match(r"^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$", original_id):
             print(f"⚠️ ID invalide ou manquant pour {sigma_path.name}, génération automatique")
@@ -147,14 +138,17 @@ def convert_sigma_file(sigma_path: Path, schema: dict):
         kql_queries = backend.convert(sigma_collection)
         if not kql_queries:
             raise ValueError("Aucune requête KQL générée")
+        
+        # 4. 🔧 PATCH : Remplacer Im_ → _Im_ dans la requête KQL
         kql_query = kql_queries[0]
+        kql_query = re.sub(r'\b(Im_[A-Za-z]+)\b', r'_\1', kql_query)  # Im_X → _Im_X
 
-        # 4. Extraire MITRE
+        # 5. Extraire MITRE
         tactics, techniques, tags = [], [], []
         for t in sigma_data.get("tags", []):
             t_upper = t.upper()
             if re.match(r"^ATTACK\.T[0-9]{4}(\.[0-9]{3})?$", t_upper):
-                techniques.append(t_upper)
+                techniques.append(t_upper.replace("ATTACK.", "T"))
             elif t_upper.startswith("ATTACK."):
                 tactic = t.split(".")[-1].lower()
                 if tactic not in tactics:
@@ -162,10 +156,10 @@ def convert_sigma_file(sigma_path: Path, schema: dict):
             else:
                 tags.append(t)
 
-        # 5. Générer l'ID DaaC avec padding garanti
+        # 6. Générer l'ID DaaC
         daac_id = generate_daac_id(sigma_data["id"], source="sigma")
 
-        # 6. Créer la règle DaaC
+        # 7. Créer la règle DaaC
         daac_rule = {
             "id": daac_id,
             "name": rule_title,
@@ -182,11 +176,11 @@ def convert_sigma_file(sigma_path: Path, schema: dict):
             "last_modified": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S"),
         }
 
-        # 7. Validation du schéma
+        # 8. Validation du schéma
         if not validate_rule(daac_rule, sigma_path.name, schema):
             sys.exit(1)
 
-        # 8. Sauvegarder
+        # 9. Sauvegarder
         output_file = DAAC_DIR / f"{daac_id}.yml"
         with open(output_file, "w", encoding="utf-8") as f:
             f.write(f"# source: {sigma_path.name}\n")
