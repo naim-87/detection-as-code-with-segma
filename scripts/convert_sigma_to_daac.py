@@ -143,19 +143,19 @@ def convert_sigma_file(sigma_path: Path, schema: dict):
         kql_query = kql_queries[0]
         kql_query = re.sub(r'\b(Im_[A-Za-z]+)\b', r'_\1', kql_query)  # Im_X → _Im_X
 
-        # 5. Extraire MITRE
+        # 4. Extraire MITRE
         tactics, techniques, tags = [], [], []
         for t in sigma_data.get("tags", []):
             t_upper = t.upper()
             if re.match(r"^ATTACK\.T[0-9]{4}(\.[0-9]{3})?$", t_upper):
-                techniques.append(t_upper.replace("ATTACK.", "T"))
+                techniques.append(t_upper)
             elif t_upper.startswith("ATTACK."):
                 tactic = t.split(".")[-1].lower()
                 if tactic not in tactics:
                     tactics.append(tactic)
             else:
                 tags.append(t)
-
+                
         # 6. Générer l'ID DaaC
         daac_id = generate_daac_id(sigma_data["id"], source="sigma")
 
