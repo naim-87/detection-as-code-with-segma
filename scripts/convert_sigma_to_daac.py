@@ -22,28 +22,57 @@ LOG_FILE = Path("logs/conversion.log")
 DAAC_DIR.mkdir(exist_ok=True)
 LOG_FILE.parent.mkdir(exist_ok=True)
 
-# Mapping des catégories Sigma non standard → catégories standard
-CATEGORY_MAPPING = {
-    "ps_classic_start": "process_creation",
-    "ps_module_load": "image_load",
-    "ps_script": "process_creation",
-    "registry_add": "registry_add",
-    "registry_delete": "registry_add",
-    "registry_event": "registry_add",
-    "file_create": "file_event",
-    "file_delete": "file_event",
-    "file_access": "file_event",
-    "network_connection": "network_connection",
-    "dns_query": "dns_events",
-    "driver_load": "driver_load",
-    "authentication": "logon_logoff",
-    "logon": "logon_logoff",
-    "Data": "CommandLine",
+# Mapping des catégories Sigma → Tables ASIM/Sentinel
+CATEGORY_TO_TABLE = {
+    "process_creation": "imProcessCreate",
+    "image_load": "imImageLoad",
+    "registry_add": "imRegistry",
+    "registry_delete": "imRegistry",
+    "registry_event": "imRegistry",
+    "file_create": "imFileEvent",
+    "file_delete": "imFileEvent",
+    "file_access": "imFileEvent",
+    "network_connection": "imNetworkConnection",
+    "dns_query": "imDnsEvents",
+    "driver_load": "imDriverLoad",
+    "logon_logoff": "imLogon",
+    "authentication": "imLogon",
 }
 
-# Mapping des champs Sigma → ASIM (KQL)
+# Mapping des tables ASIM → Tables Sentinel réelles
+ASIM_TO_SENTINEL_TABLE = {
+    "imProcessCreate": "DeviceProcessEvents",
+    "imRegistry": "DeviceRegistryEvents",
+    "imNetworkConnection": "DeviceNetworkEvents",
+    "imDnsEvents": "DeviceDnsEvents",
+    "imFileEvent": "DeviceFileEvents",
+    "imImageLoad": "DeviceImageLoadEvents",
+    "imLogon": "DeviceLogonEvents",
+    "imDriverLoad": "DeviceImageLoadEvents",
+}
+
+# Champs valides par table (pour validation/correction)
+VALID_FIELDS = {
+    "imProcessCreate": [
+        "ActingProcessCommandLine", "ActingProcessCreationTime", "ActingProcessFileCompany",
+        "ActingProcessFileDescription", "ActingProcessFileInternalName",
+        "ActingProcessFileOriginalName", "ActingProcessFileProduct", "ActingProcessFileSize",
+        "ActingProcessFileVersion", "ActingProcessGuid", "ActingProcessIMPHASH",
+        "ActingProcessId", "ActingProcessInjectedAddress", "ActingProcessIntegrityLevel",
+        "ActingProcessIsHidden", "ActingProcessMD5", "ActingProcessName",
+        "ActingProcessSHA1", "ActingProcessSHA256", "ActingProcessSHA512",
+        "ActingProcessTokenElevation", "InitiatingProcessCommandLine", "DeviceName",
+        "ProcessCommandLine", "FileName", "FolderPath"
+    ],
+    "imRegistry": [
+        "RegistryKey", "RegistryValueName", "RegistryValueData", "RegistryValueType",
+        "DeviceName", "ActorUsername", "ActorUserId", "AccountName", "RemoteIP"
+    ],
+    # Ajoute d'autres si nécessaire
+}
+
+# Mapping des champs Sigma → ASIM (KQL) - utilisé après génération
 FIELD_MAPPING = {
-    # --- Processus ---
     "Image": "FileName",
     "CommandLine": "ProcessCommandLine",
     "CurrentDirectory": "FolderPath",
@@ -52,69 +81,25 @@ FIELD_MAPPING = {
     "ParentProcessName": "InitiatingProcessFileName",
     "CreatorProcessName": "InitiatingProcessFileName",
     "Hashes": "SHA1",
-
-    # --- Réseau ---
-    "DestinationIp": "RemoteIP",
-    "DestinationPort": "RemotePort",
-    "SourceIp": "LocalIP",
-    "SourcePort": "LocalPort",
-    "Protocol": "Protocol",
-
-    # --- DNS ---
-    "QueryName": "DnsQuery",
-    "QueryResults": "DnsResponse",
-
-    # --- Registre ---
     "TargetObject": "RegistryKey",
     "Details": "RegistryValueData",
     "NewName": "RegistryValueName",
     "EventType": "RegistryOperation",
-
-    # --- Fichiers ---
     "TargetFilename": "FileName",
-    "FileName": "FileName",
     "FilePath": "FolderPath",
-    "FileExtension": "FileExtension",
-
-    # --- Authentification ---
     "SubjectUserName": "AccountName",
-    "SubjectUserSid": "AccountSid",
-    "TargetUserName": "AccountName",
-    "TargetUserSid": "AccountSid",
-    "TargetDomainName": "DomainName",
     "IpAddress": "RemoteIP",
-    "LogonType": "LogonType",
-
-    # --- Pilotes ---
-    "LoadedImage": "FileName",
-    "Signature": "Signer",
-
-    # --- Divers ---
     "Data": "CommandLine",
     "IntegrityLevel": "ProcessIntegrityLevel",
 }
 
-# Mapping des tables ASIM → Tables Sentinel réelles
-ASIM_TABLE_MAPPING = {
-    "imProcessCreate": "DeviceProcessEvents",
-    "imRegistry": "DeviceRegistryEvents",
-    "imNetworkConnection": "DeviceNetworkEvents",
-    "imDnsEvents": "DeviceDnsEvents",
-    "imFileEvent": "DeviceFileEvents",
-    "imImageLoad": "DeviceImageLoadEvents",
-    "imLogon": "DeviceLogonEvents",
-    "imDriverLoad": "DeviceImageLoadEvents",  # souvent intégré
-}
-
 
 def log_conversion(message: str):
-    """Écrit un message dans le fichier de log avec horodatage."""
     with open(LOG_FILE, "a", encoding="utf-8") as f:
         f.write(f"{datetime.now().isoformat()} | {message}\n")
 
 
 def load_schema():
-    """Charge le schéma JSON pour validation des règles DaaC."""
     if not SCHEMA_PATH.exists():
         print(f"❌ Schema file not found: {SCHEMA_PATH}")
         sys.exit(1)
@@ -123,7 +108,6 @@ def load_schema():
 
 
 def validate_rule(rule: dict, rule_name: str, schema: dict) -> bool:
-    """Validation JSON Schema d'une règle DaaC"""
     try:
         validate(instance=rule, schema=schema)
         print(f"✅ {rule_name} est valide selon le schéma")
@@ -135,60 +119,50 @@ def validate_rule(rule: dict, rule_name: str, schema: dict) -> bool:
 
 
 def generate_daac_id(sigma_id: str, source: str = "sigma") -> str:
-    """Génère un ID DaaC formaté : SIGMA-YYYY-XXX"""
-    if source == "sigma" and sigma_id:
-        digits = re.sub(r"\D", "", sigma_id)
-        if len(digits) >= 7:
-            prefix = int(digits[:4]) % 10000
-            suffix = int(digits[4:7]) % 1000
-            return f"SIGMA-{prefix:04d}-{suffix:03d}"
-        elif len(digits) >= 3:
-            prefix = (hash(digits) % 9000 + 1000) % 10000
-            suffix = int(digits[-3:]) % 1000
-            return f"SIGMA-{prefix:04d}-{suffix:03d}"
-
+    digits = re.sub(r"\D", "", sigma_id or "")
+    if len(digits) >= 7:
+        prefix = int(digits[:4]) % 10000
+        suffix = int(digits[4:7]) % 1000
+        return f"SIGMA-{prefix:04d}-{suffix:03d}"
     base = abs(hash(sigma_id or str(uuid.uuid4()))) % 1000
     year = datetime.now().year % 10000
     return f"SIGMA-{year:04d}-{base:03d}"
 
 
-def fix_sigma_fields(sigma_data: dict) -> dict:
+def correct_invalid_fields(detection_item: dict, table_type: str) -> dict:
     """
-    Corrige les champs Sigma non supportés par le pipeline ASIM.
-    Ex: CreatorProcessName → ParentImage
+    Remplace les champs non valides par un champ générique valide.
+    Ex: champ inconnu → ProcessCommandLine (selon table)
     """
-    field_replacements = {
-        "CreatorProcessName": "ParentImage",
-        "TargetProcessFilename": "Image",
-        "NewFileName": "TargetFilename",
-        "OriginalFileName": "Image",  # fallback
-    }
+    valid_fields = VALID_FIELDS.get(table_type, [])
+    if not valid_fields:
+        return detection_item
 
-    if "detection" not in sigma_data:
-        return sigma_data
-
-    def recursive_replace(obj):
+    def recursive_fix(obj):
         if isinstance(obj, dict):
-            for key, value in list(obj.items()):
-                if key == "field" and isinstance(value, str) and value in field_replacements:
-                    old = value
-                    new = field_replacements[value]
-                    print(f"🔧 [FIX] Champ invalide: {old} → {new}")
-                    obj["field"] = new
+            for key in list(obj.keys()):
+                if key == "field" and isinstance(obj[key], str):
+                    field = obj[key]
+                    if field not in valid_fields:
+                        # Remplacer par un champ générique pertinent
+                        if table_type == "imProcessCreate":
+                            print(f"🔧 [CORRECT] Champ invalide '{field}' → 'ProcessCommandLine'")
+                            obj["field"] = "ProcessCommandLine"
+                        elif table_type == "imRegistry":
+                            print(f"🔧 [CORRECT] Champ invalide '{field}' → 'RegistryKey'")
+                            obj["field"] = "RegistryKey"
                 else:
-                    recursive_replace(value)
+                    recursive_fix(obj[key])
         elif isinstance(obj, list):
             for item in obj:
-                recursive_replace(item)
+                recursive_fix(item)
 
-    recursive_replace(sigma_data["detection"])
-    return sigma_data
+    recursive_fix(detection_item)
+    return detection_item
 
 
 def convert_sigma_file(sigma_path: Path, schema: dict):
-    """Convertit un fichier Sigma en règle DaaC compatible Sentinel."""
     try:
-        # 1. Lire le fichier Sigma
         with open(sigma_path, 'r', encoding='utf-8') as f:
             sigma_data = yaml.safe_load(f)
 
@@ -197,26 +171,30 @@ def convert_sigma_file(sigma_path: Path, schema: dict):
 
         log_conversion(f"PROCESSING: {sigma_path.name}")
 
-        # === PATCH 0 : Corriger les champs Sigma invalides ===
-        sigma_data = fix_sigma_fields(sigma_data)
+        # === Étape 1 : Déterminer la table cible à partir de la catégorie ===
+        category = sigma_data.get("logsource", {}).get("category")
+        table_type = CATEGORY_TO_TABLE.get(category)
+        if not table_type:
+            print(f"⚠️ Catégorie inconnue: {category}, on suppose imProcessCreate")
+            table_type = "imProcessCreate"
 
-        # === PATCH 1 : Corriger logsource.category si nécessaire ===
-        if "logsource" in sigma_data:
-            category = sigma_data["logsource"].get("category")
-            if category and category in CATEGORY_MAPPING:
-                print(f"🔧 [PATCH] logsource.category '{category}' → '{CATEGORY_MAPPING[category]}'")
-                sigma_data["logsource"]["category"] = CATEGORY_MAPPING[category]
+        # === Étape 2 : Corriger les champs invalides AVANT conversion ===
+        if "detection" in sigma_data:
+            sigma_data["detection"] = correct_invalid_fields(sigma_data["detection"], table_type)
 
-        # Valider/générer un ID UUID valide
-        original_id = sigma_data.get("id", "")
-        if not re.match(r"^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$", original_id):
-            generated_uuid = str(uuid.uuid4())
-            print(f"⚠️ [ID] ID invalide ou manquant → généré : {generated_uuid}")
-            sigma_data["id"] = generated_uuid
+        # === Étape 3 : Corriger le nom de la catégorie si besoin ===
+        if "logsource" in sigma_data and category in CATEGORY_TO_TABLE:
+            sigma_data["logsource"]["category"] = table_type
+
+        # === Étape 4 : Générer un ID valide ===
+        if not re.match(r"^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$", sigma_data.get("id", "")):
+            old_id = sigma_data.get("id", "unknown")
+            sigma_data["id"] = str(uuid.uuid4())
+            print(f"🔁 ID généré: {old_id} → {sigma_data['id']}")
 
         rule_title = sigma_data.get("title", sigma_path.stem)
 
-        # 2. Charger la collection Sigma
+        # === Étape 5 : Convertir en collection Sigma ===
         try:
             sigma_collection = SigmaCollection.from_yaml(yaml.dump(sigma_data))
         except Exception as e:
@@ -226,26 +204,33 @@ def convert_sigma_file(sigma_path: Path, schema: dict):
             else:
                 raise
 
-        # 3. Générer la requête KQL via le backend ASIM
+        # === Étape 6 : Générer la requête KQL ===
         backend = KustoBackend(processing_pipeline=sentinel_asim_pipeline())
         kql_queries = backend.convert(sigma_collection)
         if not kql_queries:
             raise ValueError("Aucune requête KQL générée")
-
         kql_query = kql_queries[0]
 
-        # 🔧 PATCH 1 : Im_Field → _Im_Field
-        kql_query = re.sub(r'\b(Im_[A-Za-z_]+)\b', r'_\1', kql_query)
-
-        # 🔧 PATCH 2 : Appliquer FIELD_MAPPING (Sigma → ASIM)
+        # === Étape 7 : Appliquer FIELD_MAPPING (champs) ===
         for sigma_field, asim_field in FIELD_MAPPING.items():
             kql_query = re.sub(rf'\b{re.escape(sigma_field)}\b', asim_field, kql_query)
 
-        # 🔧 PATCH 3 : Remplacer les tables ASIM (im*) par les vraies tables Sentinel
-        for asim_table, real_table in ASIM_TABLE_MAPPING.items():
-            kql_query = re.sub(rf'\b{asim_table}\b', real_table, kql_query)
+        # === Étape 8 : Remplacer Im_ → _Im_ (si nécessaire) ===
+        kql_query = re.sub(r'\b(Im_[A-Za-z_]+)\b', r'_\1', kql_query)
 
-        # 4. Extraire MITRE ATT&CK
+        # === Étape 9 : Remplacer les tables ASIM partout (même entre quotes) ===
+        real_table = ASIM_TO_SENTINEL_TABLE.get(table_type, "DeviceProcessEvents")
+        kql_query = re.sub(rf'\b{re.escape(table_type)}\b', real_table, kql_query)
+        kql_query = re.sub(rf"'{re.escape(table_type)}'", f"'{real_table}'", kql_query)
+        kql_query = re.sub(rf'"{re.escape(table_type)}"', f'"{real_table}"', kql_query)
+
+        # Nettoyer les guillemets simples autour de la requête si présents
+        kql_query = re.sub(r"^'\s*", "", kql_query.strip())
+        kql_query = re.sub(r"\s*'$", "", kql_query)
+        kql_query = re.sub(r'^"\s*', "", kql_query)
+        kql_query = re.sub(r'\s*"$', "", kql_query)
+
+        # === Étape 10 : Extraire MITRE ===
         tactics, techniques, tags = [], [], []
         for tag in sigma_data.get("tags", []):
             t_upper = tag.upper()
@@ -258,16 +243,16 @@ def convert_sigma_file(sigma_path: Path, schema: dict):
             else:
                 tags.append(tag)
 
-        # 5. Générer l'ID DaaC
-        daac_id = generate_daac_id(sigma_data["id"], source="sigma")
+        # === Étape 11 : Générer l'ID DaaC ===
+        daac_id = generate_daac_id(sigma_data["id"])
 
-        # 6. Créer la règle DaaC
+        # === Étape 12 : Créer la règle DaaC ===
         daac_rule = {
             "id": daac_id,
             "name": rule_title,
             "description": sigma_data.get("description", "No description"),
-            "tactics": sorted(list(set(tactics))),
-            "techniques": sorted(list(set(techniques))),
+            "tactics": sorted(set(tactics)),
+            "techniques": sorted(set(techniques)),
             "severity": sigma_data.get("level", "medium").capitalize(),
             "query": kql_query.strip(),
             "status": "test",
@@ -278,12 +263,12 @@ def convert_sigma_file(sigma_path: Path, schema: dict):
             "last_modified": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S"),
         }
 
-        # 7. Validation du schéma
+        # === Étape 13 : Valider le schéma ===
         if not validate_rule(daac_rule, sigma_path.name, schema):
             log_conversion(f"VALIDATION_FAILED: {sigma_path.name}")
             return
 
-        # 8. Sauvegarder
+        # === Étape 14 : Sauvegarder ===
         output_file = DAAC_DIR / f"{daac_id}.yml"
         with open(output_file, "w", encoding="utf-8") as f:
             f.write(f"# source: {sigma_path.name}\n")
@@ -299,11 +284,9 @@ def convert_sigma_file(sigma_path: Path, schema: dict):
 
 
 def main():
-    """Point d'entrée principal."""
     if not SIGMA_DIR.exists():
         print(f"❌ Directory not found: {SIGMA_DIR}")
         sys.exit(1)
-
     if not SCHEMA_PATH.exists():
         print(f"❌ Schema not found: {SCHEMA_PATH}")
         sys.exit(1)
