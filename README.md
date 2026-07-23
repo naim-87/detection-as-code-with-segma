@@ -1,26 +1,27 @@
-#  Framework Detection-as-Code (DaaC) - SOC MSSP
+# 🛡️ Detection-as-Code (DaaC) Framework | SOC MSSP
 
-Ce depott centralise toutes les règles de détection pour nos clients.
+Welcome to the central nervous system for our client detection logic. This repository serves as the single source of truth for all Detection-as-Code (DaaC) rules, ensuring our SOC MSSP stays one step ahead of threats.
 
-## 📁 Structure
-- `/rules/` : Règles DaaC (YAML)
-- `/sigma-rules/` : Règles Sigma à convertir
-- `/schemas/` : Schéma de validation
-- `/scripts/` : Automatisations
-- `/.github/workflows/` : CI/CD
+## 📁 Repository Anatomy
+* **`/rules/`** – Production-ready DaaC rules (YAML).
+* **`/sigma-rules/`** – Staging area for raw Sigma rules awaiting conversion.
+* **`/schemas/`** – Validation schemas to keep syntax strictly standardized.
+* **`/scripts/`** – Automation utilities and conversion logic.
+* **`/.github/workflows/`** – CI/CD pipelines that keep deployment seamless.
 
-##  Ajouter une règle
-1. Ajoute une règle Sigma dans `/sigma-rules/`
-2. Ouvre une Pull Request
-3. Le pipeline convertit et valide automatiquement
+## 🚀 Adding a New Rule
+Contributing is simple and heavily automated:
+1. **Draft:** Add your new Sigma rule to the `/sigma-rules/` directory.
+2. **Propose:** Open a Pull Request.
+3. **Deploy:** The CI/CD pipeline will automatically convert, lint, and validate your rule.
 
-##  Validation
-- Toutes les règles doivent passer le linting et la validation de schéma.
-- Les modifications doivent être approuvées par un lead.
+## ✅ Quality Assurance
+No rule reaches production without passing our checks:
+* **Strict Syntax:** All rules must pass automated linting and schema validation.
+* **Peer Review:** Every change requires explicit sign-off from a Detection Lead.
 
-## 🔐 Secrets
-Accès restreint. Ne jamais exposer de credentials.
+## 🔐 Security & Secrets
+*Practice what we preach: Zero Trust applies to this repo.*
+Access is strictly restricted. **Never** commit credentials, API keys, or sensitive tokens.
 
 ---
-
-👉 En cas de doute : contacter le lead detection.
