@@ -1,0 +1,29 @@
+# CODEOWNERS pour un petit projet
+
+# Propriétaire principal
+* @naim-87
+
+# Documentation
+/README.md @naim-87 @orgname/docs-team
+/docs/ @orgname/docs-team
+
+# Code source principal
+/src/ @naim-87 @orgname/core-team
+
+# Frontend
+/frontend/ @orgname/frontend-team
+
+# Backend
+/backend/ @orgname/backend-team
+
+# Tests
+/tests/ @orgname/qa-team
+
+# Configuration
+/.github/ @naim-87
+/Dockerfile @naim-87
+/docker-compose.yml @naim-87
+
+# Sécurité (fichiers sensibles)
+*.env @naim-87
+/config/secrets/ @naim-87
