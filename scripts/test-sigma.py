@@ -1,7 +1,7 @@
 import sys
 
-print("🔧 Python executable:", sys.executable)
-print("📦 Python path:", sys.path)
+print(" Python executable:", sys.executable)
+print(" Python path:", sys.path)
 
 try:
     import sigma
@@ -36,4 +36,4 @@ try:
 except Exception as e:
     print("❌ Erreur import KustoBackend:", e)
 
-print("🎉 Vérification terminée ! Si tout est vert, tu peux utiliser sigma-cli avec Sentinel.")
+print(" Vérification terminée ! Si tout est vert, tu peux utiliser sigma-cli avec Sentinel.")

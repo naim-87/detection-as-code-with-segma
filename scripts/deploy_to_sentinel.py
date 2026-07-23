@@ -17,7 +17,7 @@ SUBSCRIPTION_ID = os.getenv("SUBSCRIPTION_ID")
 RESOURCE_GROUP = os.getenv("RESOURCE_GROUP")
 WORKSPACE_NAME = os.getenv("WORKSPACE_NAME")
 
-# 🔧 CORRIGÉ : Suppression des espaces autour des variables
+
 AUTH_URL = f"https://login.microsoftonline.com/{TENANT_ID}/oauth2/v2.0/token"
 API_URL = (f"https://management.azure.com/subscriptions/{SUBSCRIPTION_ID}"
            f"/resourceGroups/{RESOURCE_GROUP}/providers/Microsoft.OperationalInsights"
@@ -189,11 +189,11 @@ def ensure_entity_mappings(entity_mappings, rule_query=None):
 
 # === Auth & Deployment ===
 def get_access_token():
-    # 🔧 CORRIGÉ : Suppression des espaces dans le scope
+    
     payload = {
         'client_id': CLIENT_ID,
         'client_secret': CLIENT_SECRET,
-        'scope': 'https://management.azure.com/.default',  # ✅ Sans espaces
+        'scope': 'https://management.azure.com/.default',  
         'grant_type': 'client_credentials'
     }
     headers = {'Content-Type': 'application/x-www-form-urlencoded'}

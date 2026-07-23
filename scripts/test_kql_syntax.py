@@ -27,7 +27,7 @@ def log_message(level: str, message: str):
         f.write(f"{level}: {message}\n")
 
 
-# ✅ Tables autorisées : seules les versions avec _Im_* sont acceptées
+# Tables autorisées : seules les versions avec _Im_* sont acceptées
 ALLOWED_TABLES = {
     # --- Tables Device (MDE) ---
     "DeviceProcessEvents",
@@ -66,7 +66,7 @@ ALLOWED_TABLES = {
     "WireData"
 }
 
-# 🔄 Normalisation des alias fréquents vers les noms réels (_Im_*)
+#  Normalisation des alias fréquents vers les noms réels (_Im_*)
 ASIM_NORMALIZATION = {
     "imProcessCreate": "_Im_ProcessCreate",
     "imRegistry": "_Im_Registry",
@@ -79,7 +79,7 @@ ASIM_NORMALIZATION = {
     "imWinEvent": "_Im_WinEvent"
 }
 
-# ✅ Opérateurs KQL valides
+#  Opérateurs KQL valides
 VALID_OPERATORS = {
     "where", "project", "extend", "summarize", "count", "make_list",
     "join", "union", "order", "sort", "limit", "parse", "mv-expand",

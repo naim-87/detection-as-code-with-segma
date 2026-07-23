@@ -30,39 +30,40 @@ jobs:
           FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} HEAD | grep '^sigma-rules/.*\.yml$' || echo "")
           if [ -n "$FILES" ]; then
             echo "sigma_changed=true" >> $GITHUB_OUTPUT
-            echo "📁 Fichiers détectés :"
+            echo " Detected files:"
             echo "$FILES"
           else
             echo "sigma_changed=false" >> $GITHUB_OUTPUT
           fi
       
-      # ✔ Étape 1 : Validation stricte des règles Sigma
+      # ✔ Step 1: Strict validation of Sigma rules
       - name: Validate Sigma syntax and structure
         run: |
-          echo " 👍 démarrage de validation "
+          echo " Starting validation"
           python scripts/validate_sigma.py --fix sigma-rules/*.yml  
-          echo " 👍 validation terminer"
+          echo " Validation completed"
 
-      # ✔ étape 2 : convertion des régles sigma  
+      # ✔ Step 2: Convert Sigma rules
       - name: Convert Sigma to DaaC
         if: steps.check-sigma.outputs.sigma_changed == 'true'
         run: |
-          echo "🚀 Démarrage de la conversion Sigma → DaaC"
-          set -x  # Active le mode debug
+          echo " Starting Sigma → DaaC conversion"
+          set -x  # Enable debug mode
           python scripts/convert_sigma_to_daac.py
-          echo "✅ Conversion terminée"
-      # étape 3 : validation selon le shemas pres définit
+          echo " Conversion completed"
+          
+      # Step 3: Validate against predefined schema
       - name: Validate DaaC rules
-        shell: bash  # ✅ Champ du step, pas du script
+        shell: bash
         run: |
           for rule in rules/*.yml; do
-            echo "🔍 Validating $rule"
+            echo " Validating $rule"
             python scripts/validate_rule.py "$rule" schemas/rule-schema.json
             if [ $? -ne 0 ]; then
               exit 1
             fi
-          done  # ✅ Manquait ! La boucle doit être fermée
+          done
           
-      # étape 4 : validation KQL syntax
+      # Step 4: Validate KQL syntax
       - name: Validate KQL syntax
-        run: python  scripts/test_kql_syntax.py
+        run: python scripts/test_kql_syntax.py

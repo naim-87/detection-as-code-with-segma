@@ -122,7 +122,7 @@ def log_conversion(message: str):
 
 def load_schema():
     if not SCHEMA_PATH.exists():
-        print(f"❌ Schema non trouvé : {SCHEMA_PATH}")
+        print(f" Schema non trouvé : {SCHEMA_PATH}")
         sys.exit(1)
     with open(SCHEMA_PATH, "r", encoding="utf-8") as f:
         return json.load(f)
@@ -131,10 +131,10 @@ def load_schema():
 def validate_rule(rule: dict, rule_name: str, schema: dict) -> bool:
     try:
         validate(instance=rule, schema=schema)
-        print(f"✅ {rule_name} : valide")
+        print(f" {rule_name} : valide")
         return True
     except Exception as e:
-        print(f"❌ {rule_name} : erreur → {str(e)}")
+        print(f" {rule_name} : erreur → {str(e)}")
         log_conversion(f"VALIDATION_ERROR: {rule_name} → {str(e)}")
         return False
 
@@ -164,7 +164,7 @@ def convert_sigma_file(sigma_path: Path, schema: dict):
         category = sigma_data.get("logsource", {}).get("category")
         asim_table = CATEGORY_TO_ASIM_TABLE.get(category)
         if not asim_table:
-            print(f"⚠️ Catégorie inconnue: {category}, on utilise imProcessCreate par défaut")
+            print(f" Catégorie inconnue: {category}, on utilise imProcessCreate par défaut")
             asim_table = "imProcessCreate"
 
         # Trouver la table Sentinel correspondante
@@ -174,7 +174,7 @@ def convert_sigma_file(sigma_path: Path, schema: dict):
         if not re.match(r"^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$", sigma_data.get("id", "")):
             old_id = sigma_data.get("id", "missing")
             sigma_data["id"] = str(uuid.uuid4())
-            print(f"🔁 ID généré: {old_id} → {sigma_data['id']}")
+            print(f" ID généré: {old_id} → {sigma_data['id']}")
 
         rule_title = sigma_data.get("title", sigma_path.stem)
 
@@ -263,34 +263,34 @@ def convert_sigma_file(sigma_path: Path, schema: dict):
             yaml.dump(daac_rule, f, sort_keys=False, indent=2, allow_unicode=True)
 
         log_conversion(f"SUCCESS: {sigma_path.name} → {output_file.name}")
-        print(f"✅ Converti: {sigma_path.name} → {output_file.name}")
+        print(f" Converti: {sigma_path.name} → {output_file.name}")
 
     except Exception as e:
         error_msg = f"FAILED: {sigma_path.name} → {str(e)}"
         log_conversion(f"ERROR: {error_msg}")
-        print(f"❌ {error_msg}")
+        print(f" {error_msg}")
 
 
 def main():
     if not SIGMA_DIR.exists():
-        print(f"❌ Dossier introuvable : {SIGMA_DIR}")
+        print(f" Dossier introuvable : {SIGMA_DIR}")
         sys.exit(1)
     if not SCHEMA_PATH.exists():
-        print(f"❌ Schéma introuvable : {SCHEMA_PATH}")
+        print(f" Schéma introuvable : {SCHEMA_PATH}")
         sys.exit(1)
 
     schema = load_schema()
     sigma_files = list(SIGMA_DIR.glob("*.yml"))
 
     if not sigma_files:
-        print("📭 Aucun fichier .yml trouvé dans sigma-rules/")
+        print(" Aucun fichier .yml trouvé dans sigma-rules/")
         return
 
-    print(f"🔍 {len(sigma_files)} règles Sigma trouvées. Démarrage de la conversion...\n")
+    print(f" {len(sigma_files)} règles Sigma trouvées. Démarrage de la conversion...\n")
     for file in sigma_files:
         convert_sigma_file(file, schema)
 
-    print(f"\n🎉 Conversion terminée. Journal : {LOG_FILE}")
+    print(f"\n Conversion terminée. Journal : {LOG_FILE}")
 
 
 if __name__ == "__main__":

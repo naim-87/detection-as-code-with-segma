@@ -87,17 +87,17 @@ def validate_and_fix_sigma_file(path, autofix=False):
             # Champs requis
             for field, default in REQUIRED_FIELDS.items():
                 if field not in doc:
-                    print(f"⚠️  Champ manquant : {field} dans {path}")
+                    print(f"  Champ manquant : {field} dans {path}")
                     if autofix:
                         doc[field] = default
                         modified = True
-                        print(f"   ➕ Ajouté : {field}")
+                        print(f"    Ajouté : {field}")
 
             # Correction de date
             if "date" in doc:
                 fixed = fix_date(doc["date"])
                 if fixed != doc["date"]:
-                    print(f"⚠️  Format date corrigé : {doc['date']} → {fixed}")
+                    print(f"  Format date corrigé : {doc['date']} → {fixed}")
                     if autofix:
                         doc["date"] = fixed
                         modified = True
@@ -106,25 +106,25 @@ def validate_and_fix_sigma_file(path, autofix=False):
                     if autofix:
                         doc["date"] = "2025-01-01"
                         modified = True
-                        print(f"   ➕ Date remplacée par 2025-01-01")
+                        print(f"    Date remplacée par 2025-01-01")
                     else:
                         valid = False
 
             # Vérification ID
             if "id" in doc and not is_valid_uuid(doc["id"]):
-                print(f"⚠️  ID invalide : {doc['id']} dans {path}")
+                print(f"  ID invalide : {doc['id']} dans {path}")
                 if autofix:
                     new_id = str(uuid.uuid4())
                     doc["id"] = new_id
                     modified = True
-                    print(f"   ➕ ID généré : {new_id}")
+                    print(f"    ID généré : {new_id}")
                 else:
                     valid = False
 
             # Vérifier condition dans detection
             if "detection" in doc and isinstance(doc["detection"], dict):
                 if "condition" not in doc["detection"]:
-                    print(f"⚠️  'condition' manquant dans 'detection' ({path})")
+                    print(f"  'condition' manquant dans 'detection' ({path})")
                     if autofix:
                         doc["detection"]["condition"] = "selection"
                         modified = True
@@ -146,7 +146,7 @@ def validate_and_fix_sigma_file(path, autofix=False):
 
             with open(file_path, "w", encoding="utf-8") as f:
                 yaml.dump_all(serializable_docs, f, sort_keys=False, allow_unicode=True, default_flow_style=False)
-            print(f"💾 Fichier corrigé : {file_path} (backup: {backup})")
+            print(f" Fichier corrigé : {file_path} (backup: {backup})")
 
         if valid:
             print(f"✅ Valide : {path}")
@@ -198,4 +198,4 @@ if __name__ == "__main__":
     if not all_valid:
         sys.exit(1)
     else:
-        print("🎉 Tous les fichiers sont valides.")
+        print(" Tous les fichiers sont valides.")
