@@ -1,29 +1,15 @@
-# CODEOWNERS pour un petit projet
-
-# Propriétaire principal
+# Default owner for everything in the repo
 * @naim-87
 
-# Documentation
-/README.md @naim-87 @orgname/docs-team
-/docs/ @orgname/docs-team
+# Security-sensitive paths
+.github/workflows/* @naim-87
+.github/actions/* @naim-87
+scripts/** @naim-87
+Dockerfile* @naim-87
+*.yml @naim-87
+*.yaml @naim-87
 
-# Code source principal
-/src/ @naim-87 @orgname/core-team
-
-# Frontend
-/frontend/ @orgname/frontend-team
-
-# Backend
-/backend/ @orgname/backend-team
-
-# Tests
-/tests/ @orgname/qa-team
-
-# Configuration
-/.github/ @naim-87
-/Dockerfile @naim-87
-/docker-compose.yml @naim-87
-
-# Sécurité (fichiers sensibles)
-*.env @naim-87
-/config/secrets/ @naim-87
+# Detection content (adjust to your actual folders)
+rules/** @naim-87
+sigma/** @naim-87
+detections/** @naim-87
